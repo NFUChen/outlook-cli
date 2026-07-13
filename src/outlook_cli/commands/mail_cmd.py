@@ -1,4 +1,4 @@
-"""Mail commands: search, read, send, reply, mark."""
+"""Mail commands: search, read, send, draft, reply, mark."""
 
 from datetime import datetime
 from typing import Optional
@@ -137,6 +137,47 @@ def send(
         print_success("Message sent.")
     else:
         print_error("Failed to send message.")
+        raise typer.Exit(1)
+
+
+@app.command()
+def draft(
+    to: Optional[list[str]] = typer.Option(None, "--to", help="Recipient email address (repeatable)"),
+    cc: Optional[list[str]] = typer.Option(None, "--cc", help="CC email address (repeatable)"),
+    bcc: Optional[list[str]] = typer.Option(None, "--bcc", help="BCC email address (repeatable)"),
+    subject: Optional[str] = typer.Option(None, "--subject", help="Message subject"),
+    body: Optional[str] = typer.Option(None, "--body", help="Message body text"),
+    importance: Optional[str] = typer.Option(None, "--importance", help="Importance: low, normal, or high"),
+) -> None:
+    """Compose a new message and save it as a draft (does not send)."""
+    if not any([to, cc, bcc, subject, body]):
+        print_error("Nothing to save: provide at least one of --to/--cc/--bcc/--subject/--body.")
+        raise typer.Exit(1)
+
+    if importance is not None and importance.lower() not in ("low", "normal", "high"):
+        print_error(f"Invalid importance: {importance} (expected low, normal, or high)")
+        raise typer.Exit(1)
+
+    account = get_account()
+    new_message = account.new_message()
+
+    for address in to or []:
+        new_message.to.add(address)
+    for address in cc or []:
+        new_message.cc.add(address)
+    for address in bcc or []:
+        new_message.bcc.add(address)
+    if subject is not None:
+        new_message.subject = subject
+    if body is not None:
+        new_message.body = body
+    if importance is not None:
+        new_message.importance = importance
+
+    if new_message.save_draft():
+        print_success("Draft saved to Drafts folder.")
+    else:
+        print_error("Failed to save draft.")
         raise typer.Exit(1)
 
 

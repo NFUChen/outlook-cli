@@ -128,6 +128,70 @@ def test_reply_message_not_found(mock_get):
     assert result.exit_code != 0
 
 
+# ── Draft command ─────────────────────────────────────────────
+
+
+@patch("outlook_cli.commands.mail_cmd.get_account")
+def test_draft_all_fields(mock_get):
+    account = mock_get.return_value
+    new_msg = account.new_message.return_value
+
+    result = runner.invoke(app, [
+        "mail", "draft",
+        "--to", "alice@example.com",
+        "--to", "bob@example.com",
+        "--cc", "carol@example.com",
+        "--bcc", "dave@example.com",
+        "--subject", "Quarterly report",
+        "--body", "Draft body text",
+        "--importance", "high",
+    ])
+    assert result.exit_code == 0
+    new_msg.to.add.assert_any_call("alice@example.com")
+    new_msg.to.add.assert_any_call("bob@example.com")
+    new_msg.cc.add.assert_called_once_with("carol@example.com")
+    new_msg.bcc.add.assert_called_once_with("dave@example.com")
+    assert new_msg.subject == "Quarterly report"
+    assert new_msg.body == "Draft body text"
+    assert new_msg.importance == "high"
+    new_msg.save_draft.assert_called_once()
+
+
+@patch("outlook_cli.commands.mail_cmd.get_account")
+def test_draft_subject_only(mock_get):
+    account = mock_get.return_value
+    new_msg = account.new_message.return_value
+
+    result = runner.invoke(app, ["mail", "draft", "--subject", "Ideas"])
+    assert result.exit_code == 0
+    new_msg.save_draft.assert_called_once()
+    new_msg.to.add.assert_not_called()
+
+
+@patch("outlook_cli.commands.mail_cmd.get_account")
+def test_draft_no_fields_errors(mock_get):
+    result = runner.invoke(app, ["mail", "draft"])
+    assert result.exit_code != 0
+
+
+@patch("outlook_cli.commands.mail_cmd.get_account")
+def test_draft_invalid_importance(mock_get):
+    result = runner.invoke(app, [
+        "mail", "draft", "--subject", "Ideas", "--importance", "urgent",
+    ])
+    assert result.exit_code != 0
+
+
+@patch("outlook_cli.commands.mail_cmd.get_account")
+def test_draft_save_failure(mock_get):
+    account = mock_get.return_value
+    new_msg = account.new_message.return_value
+    new_msg.save_draft.return_value = False
+
+    result = runner.invoke(app, ["mail", "draft", "--subject", "Ideas"])
+    assert result.exit_code != 0
+
+
 # ── Mark command ──────────────────────────────────────────────
 
 
