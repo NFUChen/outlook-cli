@@ -22,7 +22,7 @@ src/outlook_cli/
 ├── display.py           # Rich formatting: tables, panels, HTML stripping
 └── commands/
     ├── auth_cmd.py      # outlook auth login|logout|status
-    ├── mail_cmd.py      # outlook mail search|read|send|reply|mark
+    ├── mail_cmd.py      # outlook mail search|read|send|draft|reply|mark
     └── cal_cmd.py       # outlook cal list|read|create
 
 tests/
