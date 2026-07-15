@@ -1,11 +1,9 @@
 # outlook-cli
 
-A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, send, and reply to emails. List, read, and create calendar events. Built with the [O365](https://github.com/O365/python-o365) library and [Typer](https://typer.tiangolo.com/).
+A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, send, and reply to emails. List, read, and create calendar events. Written in Go — ships as a single small binary that talks directly to the [Microsoft Graph API](https://learn.microsoft.com/en-us/graph/overview).
 
 ## Prerequisites
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) package manager
 - An Azure App Registration (free) with **Microsoft Graph** delegated permissions:
   - `Mail.ReadWrite`
   - `Mail.Send`
@@ -23,10 +21,12 @@ A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, 
 
 ## Installation
 
+Download a prebuilt binary from the [releases page](https://github.com/mhattingpete/outlook-cli/releases), or build from source:
+
 ```bash
 git clone https://github.com/mhattingpete/outlook-cli.git
 cd outlook-cli
-uv sync
+go build -trimpath -ldflags "-s -w" -o outlook .
 ```
 
 ## Getting Started
@@ -146,20 +146,22 @@ Config and tokens are stored in `~/.outlook-cli/`:
 ```
 ~/.outlook-cli/
 ├── config.toml          # client_id, tenant_id
-└── o365_token.token     # OAuth token (auto-managed)
+└── token.json           # OAuth token (auto-managed, auto-refreshed)
 ```
+
+> Upgrading from the Python version? The config file is compatible, but the token format changed — run `outlook auth login` once to re-authenticate.
 
 ## Development
 
 ```bash
-# Install dev dependencies
-uv sync
-
 # Run tests
-uv run pytest tests/ -v
+go test ./... -race
+
+# Vet
+go vet ./...
 
 # Run the CLI
-uv run outlook --help
+go run . --help
 ```
 
 ## License
