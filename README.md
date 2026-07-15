@@ -58,7 +58,7 @@ outlook auth status                                      # Show auth status and 
 outlook mail search                                      # List recent inbox messages
 outlook mail search "quarterly report"                   # Full-text search
 outlook mail search --unread                             # Unread messages only
-outlook mail search --from alice@company.com             # Filter by sender
+outlook mail search --from alice@company.com             # Filter by sender (--sender also works)
 outlook mail search --start-date 2025-01-01 --end-date 2025-02-01
 outlook mail search --important --has-attachments        # Combine filters
 outlook mail search --folder "Sent Items" --limit 10     # Different folder
@@ -76,6 +76,7 @@ outlook mail reply MESSAGE_ID --body "Noted, thanks." --reply-all
 
 # Mark as read/unread
 outlook mail mark MESSAGE_ID                             # Mark as read (default)
+outlook mail mark MESSAGE_ID --read                      # Same, explicit
 outlook mail mark MESSAGE_ID --unread                    # Mark as unread
 ```
 
@@ -103,7 +104,23 @@ outlook cal create --subject "Workshop" \
 
 ## Using with Claude Code
 
-outlook-cli works with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) out of the box. Here are example prompts and what Claude does with them:
+outlook-cli works with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) out of the box.
+
+### Claude Code Skill
+
+This repo ships a skill at [`.claude/skills/outlook-cli/SKILL.md`](.claude/skills/outlook-cli/SKILL.md) that teaches Claude the full command surface — flags, message/event ID handling, and the search-vs-filter rules.
+
+- **Inside this repo**: the skill is picked up automatically.
+- **Everywhere else**: copy it to your global skills directory:
+
+```bash
+mkdir -p ~/.claude/skills
+cp -r .claude/skills/outlook-cli ~/.claude/skills/
+```
+
+### Example prompts
+
+Here are example prompts and what Claude does with them:
 
 ```bash
 # ── Email triage ──────────────────────────────────────────
