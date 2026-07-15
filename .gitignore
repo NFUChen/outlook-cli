@@ -1,14 +1,12 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
+# Go build artifacts
+/outlook
+/outlook.exe
+/dist/
+outlook-*.tar.gz
+outlook-*.zip
 
 # Auth tokens and secrets
 .env
-.test_token_cache*
+
+# Local tooling state
+.omc/

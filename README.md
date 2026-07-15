@@ -1,11 +1,9 @@
 # outlook-cli
 
-A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, send, and reply to emails. List, read, and create calendar events. Built with the [O365](https://github.com/O365/python-o365) library and [Typer](https://typer.tiangolo.com/).
+A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, send, draft, and reply to emails. List, read, and create calendar events. Written in Go — ships as a single small binary that talks directly to the [Microsoft Graph API](https://learn.microsoft.com/en-us/graph/overview).
 
 ## Prerequisites
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) package manager
 - An Azure App Registration (free) with **Microsoft Graph** delegated permissions:
   - `Mail.ReadWrite`
   - `Mail.Send`
@@ -23,10 +21,12 @@ A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, 
 
 ## Installation
 
+Download a prebuilt binary from the [releases page](https://github.com/mhattingpete/outlook-cli/releases), or build from source:
+
 ```bash
 git clone https://github.com/mhattingpete/outlook-cli.git
 cd outlook-cli
-uv sync
+go build -trimpath -ldflags "-s -w" -o outlook .
 ```
 
 ## Getting Started
@@ -58,7 +58,7 @@ outlook auth status                                      # Show auth status and 
 outlook mail search                                      # List recent inbox messages
 outlook mail search "quarterly report"                   # Full-text search
 outlook mail search --unread                             # Unread messages only
-outlook mail search --from alice@company.com             # Filter by sender
+outlook mail search --from alice@company.com             # Filter by sender (--sender also works)
 outlook mail search --start-date 2025-01-01 --end-date 2025-02-01
 outlook mail search --important --has-attachments        # Combine filters
 outlook mail search --folder "Sent Items" --limit 10     # Different folder
@@ -70,12 +70,17 @@ outlook mail read MESSAGE_ID
 outlook mail send --to bob@company.com --subject "Hello" --body "Hi Bob!"
 outlook mail send --to bob@company.com --cc carol@company.com --subject "Update" --body "FYI"
 
+# Save a draft (does not send)
+outlook mail draft --to bob@company.com --subject "WIP" --body "Draft body"
+outlook mail draft --to a@x.com --to b@x.com --cc c@x.com --bcc d@x.com --subject "Multi" --body "..." --importance high
+
 # Reply to a message
 outlook mail reply MESSAGE_ID --body "Thanks for the update!"
 outlook mail reply MESSAGE_ID --body "Noted, thanks." --reply-all
 
 # Mark as read/unread
 outlook mail mark MESSAGE_ID                             # Mark as read (default)
+outlook mail mark MESSAGE_ID --read                      # Same, explicit
 outlook mail mark MESSAGE_ID --unread                    # Mark as unread
 ```
 
@@ -103,7 +108,23 @@ outlook cal create --subject "Workshop" \
 
 ## Using with Claude Code
 
-outlook-cli works with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) out of the box. Here are example prompts and what Claude does with them:
+outlook-cli works with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) out of the box.
+
+### Claude Code Skill
+
+This repo ships a skill at [`.claude/skills/outlook-cli/SKILL.md`](.claude/skills/outlook-cli/SKILL.md) that teaches Claude the full command surface — flags, message/event ID handling, and the search-vs-filter rules.
+
+- **Inside this repo**: the skill is picked up automatically.
+- **Everywhere else**: copy it to your global skills directory:
+
+```bash
+mkdir -p ~/.claude/skills
+cp -r .claude/skills/outlook-cli ~/.claude/skills/
+```
+
+### Example prompts
+
+Here are example prompts and what Claude does with them:
 
 ```bash
 # ── Email triage ──────────────────────────────────────────
@@ -146,20 +167,22 @@ Config and tokens are stored in `~/.outlook-cli/`:
 ```
 ~/.outlook-cli/
 ├── config.toml          # client_id, tenant_id
-└── o365_token.token     # OAuth token (auto-managed)
+└── token.json           # OAuth token (auto-managed, auto-refreshed)
 ```
+
+> Upgrading from the Python version? The config file is compatible, but the token format changed — run `outlook auth login` once to re-authenticate.
 
 ## Development
 
 ```bash
-# Install dev dependencies
-uv sync
-
 # Run tests
-uv run pytest tests/ -v
+go test ./... -race
+
+# Vet
+go vet ./...
 
 # Run the CLI
-uv run outlook --help
+go run . --help
 ```
 
 ## License
