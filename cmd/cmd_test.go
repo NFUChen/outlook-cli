@@ -286,6 +286,87 @@ func TestMailSendMissingRequiredFlag(t *testing.T) {
 	}
 }
 
+// ── mail draft ─────────────────────────────────────────────────
+
+func TestMailDraftAllFields(t *testing.T) {
+	var gotReq *http.Request
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotReq = r.Clone(context.Background())
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"draft-1"}`)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "draft",
+		"--to", "alice@example.com",
+		"--to", "bob@example.com",
+		"--cc", "carol@example.com",
+		"--bcc", "dave@example.com",
+		"--subject", "Quarterly report",
+		"--body", "Draft body text",
+		"--importance", "high")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotReq.Method != http.MethodPost || gotReq.URL.Path != "/me/messages" {
+		t.Errorf("%s %s", gotReq.Method, gotReq.URL.Path)
+	}
+	for _, want := range []string{
+		`"alice@example.com"`, `"bob@example.com"`,
+		"ccRecipients", "bccRecipients",
+		`"subject":"Quarterly report"`, `"importance":"high"`,
+	} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("body %q missing %q", gotBody, want)
+		}
+	}
+	if !strings.Contains(out.String(), "OK: Draft saved to Drafts folder.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
+func TestMailDraftSubjectOnly(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"draft-1"}`)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	if err := run(app, "mail", "draft", "--subject", "Ideas"); err != nil {
+		t.Fatal(err)
+	}
+	if gotBody != `{"subject":"Ideas"}` {
+		t.Errorf("body = %q", gotBody)
+	}
+	if !strings.Contains(out.String(), "OK: Draft saved to Drafts folder.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
+func TestMailDraftNoFieldsErrors(t *testing.T) {
+	app, _, _ := testApp(nil)
+	err := run(app, "mail", "draft")
+	if err == nil || err.Error() != "Nothing to save: provide at least one of --to/--cc/--bcc/--subject/--body." {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestMailDraftInvalidImportance(t *testing.T) {
+	app, _, _ := testApp(nil)
+	err := run(app, "mail", "draft", "--subject", "Ideas", "--importance", "urgent")
+	if err == nil || err.Error() != "Invalid importance: urgent (expected low, normal, or high)" {
+		t.Errorf("err = %v", err)
+	}
+}
+
 // ── mail reply ─────────────────────────────────────────────────
 
 func TestMailReply(t *testing.T) {

@@ -181,6 +181,72 @@ func TestSendMailOmitsEmptyCc(t *testing.T) {
 	}
 }
 
+func TestCreateDraftRequest(t *testing.T) {
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/me/messages" {
+			t.Errorf("%s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"draft-1"}`)
+	}))
+	defer srv.Close()
+
+	err := testClient(srv).CreateDraft(context.Background(), Draft{
+		To:         []string{"alice@example.com", "bob@example.com"},
+		Cc:         []string{"carol@example.com"},
+		Bcc:        []string{"dave@example.com"},
+		Subject:    "Quarterly report",
+		Body:       "Draft body text",
+		Importance: "high",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotBody["subject"] != "Quarterly report" {
+		t.Errorf("subject = %v", gotBody["subject"])
+	}
+	if gotBody["importance"] != "high" {
+		t.Errorf("importance = %v", gotBody["importance"])
+	}
+	to := gotBody["toRecipients"].([]any)
+	if len(to) != 2 {
+		t.Errorf("toRecipients = %v", to)
+	}
+	if _, ok := gotBody["ccRecipients"]; !ok {
+		t.Error("ccRecipients missing")
+	}
+	if _, ok := gotBody["bccRecipients"]; !ok {
+		t.Error("bccRecipients missing")
+	}
+	body := gotBody["body"].(map[string]any)
+	if body["content"] != "Draft body text" {
+		t.Errorf("body = %v", body)
+	}
+}
+
+func TestCreateDraftOmitsEmptyFields(t *testing.T) {
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"draft-1"}`)
+	}))
+	defer srv.Close()
+
+	if err := testClient(srv).CreateDraft(context.Background(), Draft{Subject: "Ideas"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(gotBody) != 1 || gotBody["subject"] != "Ideas" {
+		t.Errorf("body = %v, want only subject", gotBody)
+	}
+}
+
 func TestReplyEndpoints(t *testing.T) {
 	tests := []struct {
 		all      bool

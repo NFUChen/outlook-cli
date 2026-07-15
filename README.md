@@ -1,6 +1,6 @@
 # outlook-cli
 
-A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, send, and reply to emails. List, read, and create calendar events. Written in Go — ships as a single small binary that talks directly to the [Microsoft Graph API](https://learn.microsoft.com/en-us/graph/overview).
+A command-line tool for Microsoft Outlook (Work/School accounts). Search, read, send, draft, and reply to emails. List, read, and create calendar events. Written in Go — ships as a single small binary that talks directly to the [Microsoft Graph API](https://learn.microsoft.com/en-us/graph/overview).
 
 ## Prerequisites
 
@@ -69,6 +69,10 @@ outlook mail read MESSAGE_ID
 # Send a message
 outlook mail send --to bob@company.com --subject "Hello" --body "Hi Bob!"
 outlook mail send --to bob@company.com --cc carol@company.com --subject "Update" --body "FYI"
+
+# Save a draft (does not send)
+outlook mail draft --to bob@company.com --subject "WIP" --body "Draft body"
+outlook mail draft --to a@x.com --to b@x.com --cc c@x.com --bcc d@x.com --subject "Multi" --body "..." --importance high
 
 # Reply to a message
 outlook mail reply MESSAGE_ID --body "Thanks for the update!"

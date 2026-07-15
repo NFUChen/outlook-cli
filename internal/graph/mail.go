@@ -109,6 +109,46 @@ func (c *Client) SendMail(ctx context.Context, to, cc, subject, body string) err
 	return c.do(ctx, http.MethodPost, "/me/sendMail", nil, payload, nil)
 }
 
+// Draft describes a new draft message. All fields are optional.
+type Draft struct {
+	To, Cc, Bcc []string
+	Subject     string
+	Body        string
+	Importance  string
+}
+
+func toRecipients(addrs []string) []Recipient {
+	rs := make([]Recipient, len(addrs))
+	for i, a := range addrs {
+		rs[i] = Recipient{EmailAddress: EmailAddress{Address: a}}
+	}
+	return rs
+}
+
+// CreateDraft saves a new message to the Drafts folder without sending it.
+func (c *Client) CreateDraft(ctx context.Context, d Draft) error {
+	msg := map[string]any{}
+	if d.Subject != "" {
+		msg["subject"] = d.Subject
+	}
+	if d.Body != "" {
+		msg["body"] = ItemBody{ContentType: "Text", Content: d.Body}
+	}
+	if len(d.To) > 0 {
+		msg["toRecipients"] = toRecipients(d.To)
+	}
+	if len(d.Cc) > 0 {
+		msg["ccRecipients"] = toRecipients(d.Cc)
+	}
+	if len(d.Bcc) > 0 {
+		msg["bccRecipients"] = toRecipients(d.Bcc)
+	}
+	if d.Importance != "" {
+		msg["importance"] = d.Importance
+	}
+	return c.do(ctx, http.MethodPost, "/me/messages", nil, msg, nil)
+}
+
 // Reply sends a reply (or reply-all) to a message with the given comment.
 func (c *Client) Reply(ctx context.Context, id, comment string, all bool) error {
 	action := "/reply"

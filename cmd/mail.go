@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -19,6 +20,7 @@ func newMailCmd(app *App) *cobra.Command {
 		newMailSearchCmd(app),
 		newMailReadCmd(app),
 		newMailSendCmd(app),
+		newMailDraftCmd(app),
 		newMailReplyCmd(app),
 		newMailMarkCmd(app),
 	)
@@ -169,6 +171,50 @@ func newMailSendCmd(app *App) *cobra.Command {
 	_ = c.MarkFlagRequired("to")
 	_ = c.MarkFlagRequired("subject")
 	_ = c.MarkFlagRequired("body")
+	return c
+}
+
+func newMailDraftCmd(app *App) *cobra.Command {
+	var to, cc, bcc []string
+	var subject, body, importance string
+	c := &cobra.Command{
+		Use:   "draft",
+		Short: "Compose a new message and save it as a draft (does not send).",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(to) == 0 && len(cc) == 0 && len(bcc) == 0 && subject == "" && body == "" {
+				return errors.New("Nothing to save: provide at least one of --to/--cc/--bcc/--subject/--body.")
+			}
+			if importance != "" {
+				switch strings.ToLower(importance) {
+				case "low", "normal", "high":
+					importance = strings.ToLower(importance)
+				default:
+					return fmt.Errorf("Invalid importance: %s (expected low, normal, or high)", importance)
+				}
+			}
+
+			client, err := app.NewClient()
+			if err != nil {
+				return err
+			}
+			draft := graph.Draft{
+				To: to, Cc: cc, Bcc: bcc,
+				Subject: subject, Body: body, Importance: importance,
+			}
+			if err := client.CreateDraft(cmd.Context(), draft); err != nil {
+				return err
+			}
+			app.Printer.Success("Draft saved to Drafts folder.")
+			return nil
+		},
+	}
+	flags := c.Flags()
+	flags.StringArrayVar(&to, "to", nil, "Recipient email address (repeatable)")
+	flags.StringArrayVar(&cc, "cc", nil, "CC email address (repeatable)")
+	flags.StringArrayVar(&bcc, "bcc", nil, "BCC email address (repeatable)")
+	flags.StringVar(&subject, "subject", "", "Message subject")
+	flags.StringVar(&body, "body", "", "Message body text")
+	flags.StringVar(&importance, "importance", "", "Importance: low, normal, or high")
 	return c
 }
 

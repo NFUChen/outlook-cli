@@ -1,6 +1,6 @@
 ---
 name: outlook-cli
-description: Operate Microsoft Outlook (Work/School) from the terminal via the `outlook` CLI — search/read/send/reply to email, mark read/unread, and list/read/create calendar events. Use this skill whenever the user asks about their Outlook inbox, unread mail, sending or replying to email, meetings, or their calendar.
+description: Operate Microsoft Outlook (Work/School) from the terminal via the `outlook` CLI — search/read/send/draft/reply to email, mark read/unread, and list/read/create calendar events. Use this skill whenever the user asks about their Outlook inbox, unread mail, sending or replying to email, meetings, or their calendar.
 ---
 
 # outlook-cli
@@ -32,6 +32,8 @@ outlook mail search [QUERY] [flags]      # List/search messages (default folder:
 
 outlook mail read MESSAGE_ID             # Full message with body (HTML stripped)
 outlook mail send --to EMAIL --subject S --body B [--cc EMAIL]
+outlook mail draft [--to EMAIL]... [--cc EMAIL]... [--bcc EMAIL]... [--subject S] [--body B] \
+  [--importance low|normal|high]        # Saves to Drafts, does NOT send; needs at least one field
 outlook mail reply MESSAGE_ID --body B [--reply-all]
 outlook mail mark MESSAGE_ID [--read|--unread]   # Default: mark as read
 ```
