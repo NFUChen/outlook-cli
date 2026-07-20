@@ -34,7 +34,8 @@ outlook mail read MESSAGE_ID             # Full message with body (HTML stripped
 outlook mail send --to EMAIL --subject S --body B [--cc EMAIL] [--html]
 outlook mail draft [--to EMAIL]... [--cc EMAIL]... [--bcc EMAIL]... [--subject S] [--body B] \
   [--importance low|normal|high] [--html]   # Saves to Drafts, does NOT send; needs at least one field
-outlook mail reply MESSAGE_ID --body B [--reply-all] [--html]
+outlook mail reply MESSAGE_ID --body B [--reply-all] [--html] [--draft]
+  # --draft: saves reply to Drafts instead of sending immediately
 outlook mail mark MESSAGE_ID [--read|--unread]   # Default: mark as read
 ```
 
@@ -69,6 +70,7 @@ outlook cal create --subject S --start "YYYY-MM-DD HH:MM" --end "YYYY-MM-DD HH:M
 outlook mail search --unread                 # 1. What's new
 outlook mail read <ID>                       # 2. Read the relevant one
 outlook mail reply <ID> --body "..."         # 3. Reply (after user confirms)
+outlook mail reply <ID> --body "..." --draft # 3b. Or save as draft for review
 outlook mail mark <ID>                       # 4. Mark handled
 ```
 

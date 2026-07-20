@@ -234,6 +234,7 @@ func newMailReplyCmd(app *App) *cobra.Command {
 	var body string
 	var replyAll bool
 	var html bool
+	var draft bool
 	c := &cobra.Command{
 		Use:   "reply MESSAGE_ID",
 		Short: "Reply to a message by ID.",
@@ -257,21 +258,26 @@ func newMailReplyCmd(app *App) *cobra.Command {
 			if html {
 				contentType = "HTML"
 			}
-			if err := client.Reply(ctx, args[0], body, contentType, replyAll); err != nil {
+			if err := client.Reply(ctx, args[0], body, contentType, replyAll, draft); err != nil {
 				return err
 			}
 
-			target := "all recipients"
-			if !replyAll && msg.From != nil {
-				target = msg.From.String()
+			if draft {
+				app.Printer.Success("Reply draft saved to Drafts folder.")
+			} else {
+				target := "all recipients"
+				if !replyAll && msg.From != nil {
+					target = msg.From.String()
+				}
+				app.Printer.Success(fmt.Sprintf("Reply sent to %s.", target))
 			}
-			app.Printer.Success(fmt.Sprintf("Reply sent to %s.", target))
 			return nil
 		},
 	}
 	c.Flags().StringVar(&body, "body", "", "Reply body text")
 	c.Flags().BoolVar(&replyAll, "reply-all", false, "Reply to all recipients")
 	c.Flags().BoolVar(&html, "html", false, "Format reply body as HTML instead of plain text")
+	c.Flags().BoolVar(&draft, "draft", false, "Save as draft instead of sending immediately")
 	_ = c.MarkFlagRequired("body")
 	return c
 }

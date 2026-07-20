@@ -158,13 +158,22 @@ func (c *Client) CreateDraft(ctx context.Context, d Draft) error {
 }
 
 // Reply sends a reply (or reply-all) to a message with the given comment.
-func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all bool) error {
+// If draft is true, creates a draft reply instead of sending immediately.
+func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all, draft bool) error {
 	if contentType == "" {
 		contentType = "Text"
 	}
-	action := "/reply"
-	if all {
-		action = "/replyAll"
+	var action string
+	if draft {
+		action = "/createReply"
+		if all {
+			action = "/createReplyAll"
+		}
+	} else {
+		action = "/reply"
+		if all {
+			action = "/replyAll"
+		}
 	}
 	path := "/me/messages/" + url.PathEscape(id) + action
 	payload := map[string]any{

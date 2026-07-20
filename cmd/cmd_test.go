@@ -500,6 +500,56 @@ func TestMailReplyWithHTMLFlag(t *testing.T) {
 	}
 }
 
+func TestMailReplyWithDraftFlag(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			fmt.Fprint(w, `{"id":"msg-1","from":{"emailAddress":{"address":"a@b.c"}}}`)
+			return
+		}
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "reply", "msg-1", "--body", "Draft reply", "--draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/me/messages/msg-1/createReply" {
+		t.Errorf("path = %q, want /me/messages/msg-1/createReply", gotPath)
+	}
+	if !strings.Contains(out.String(), "OK: Reply draft saved to Drafts folder.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
+func TestMailReplyWithDraftAndReplyAll(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			fmt.Fprint(w, `{"id":"msg-1","from":{"emailAddress":{"address":"a@b.c"}}}`)
+			return
+		}
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "reply", "msg-1", "--body", "Draft", "--draft", "--reply-all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/me/messages/msg-1/createReplyAll" {
+		t.Errorf("path = %q, want /me/messages/msg-1/createReplyAll", gotPath)
+	}
+	if !strings.Contains(out.String(), "OK: Reply draft saved to Drafts folder.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
 // ── mail mark ──────────────────────────────────────────────────
 
 func TestMailMarkDefaultsToRead(t *testing.T) {
