@@ -31,10 +31,10 @@ outlook mail search [QUERY] [flags]      # List/search messages (default folder:
   --unread --important --has-attachments # Boolean filters, combinable
 
 outlook mail read MESSAGE_ID             # Full message with body (HTML stripped)
-outlook mail send --to EMAIL --subject S --body B [--cc EMAIL]
+outlook mail send --to EMAIL --subject S --body B [--cc EMAIL] [--html]
 outlook mail draft [--to EMAIL]... [--cc EMAIL]... [--bcc EMAIL]... [--subject S] [--body B] \
-  [--importance low|normal|high]        # Saves to Drafts, does NOT send; needs at least one field
-outlook mail reply MESSAGE_ID --body B [--reply-all]
+  [--importance low|normal|high] [--html]   # Saves to Drafts, does NOT send; needs at least one field
+outlook mail reply MESSAGE_ID --body B [--reply-all] [--html]
 outlook mail mark MESSAGE_ID [--read|--unread]   # Default: mark as read
 ```
 
@@ -58,8 +58,9 @@ outlook cal create --subject S --start "YYYY-MM-DD HH:MM" --end "YYYY-MM-DD HH:M
    - Structured criteria → flags only, no positional query
 2. **IDs come from tables.** `mail search` and `cal list` print an `ID` column (long opaque Graph IDs). Pass them verbatim to `read` / `reply` / `mark`. Never invent or truncate an ID; if you don't have one, search/list first.
 3. **Times are local.** Dates are `YYYY-MM-DD`; `cal create` datetimes are `"YYYY-MM-DD HH:MM"` in the user's local timezone (quote them — they contain a space). Output is also shown in local time.
-4. **Confirm before outbound actions.** Show the user the exact recipient/subject/body (or event details) and get confirmation before running `mail send`, `mail reply`, or `cal create`. Prefer plain `reply` over `--reply-all` unless the user asks.
-5. **Errors** go to stderr as `Error: ...` with exit code 1. `Message not found` / `Event not found` usually means a stale or mistyped ID — re-run the search.
+4. **HTML emails.** Use `--html` flag with `send`, `draft`, or `reply` to send HTML-formatted emails. Without this flag, body is sent as plain text. When using `--html`, ensure the body contains valid HTML (e.g., `--body "<p>Hello <b>world</b></p>"`).
+5. **Confirm before outbound actions.** Show the user the exact recipient/subject/body (or event details) and get confirmation before running `mail send`, `mail reply`, or `cal create`. Prefer plain `reply` over `--reply-all` unless the user asks.
+6. **Errors** go to stderr as `Error: ...` with exit code 1. `Message not found` / `Event not found` usually means a stale or mistyped ID — re-run the search.
 
 ## Typical Workflows
 
@@ -81,4 +82,10 @@ outlook cal read <ID>                        # Check attendees/agenda
 **Schedule a meeting**
 ```bash
 outlook cal create --subject "Sync" --start "2026-07-18 14:00" --end "2026-07-18 14:30" --location "Room A"
+```
+
+**Send HTML email**
+```bash
+outlook mail send --to user@example.com --subject "Report" --body "<h1>Q4 Report</h1><p>See attached.</p>" --html
+outlook mail reply <ID> --body "<p>Thanks for the <strong>detailed</strong> update!</p>" --html
 ```
