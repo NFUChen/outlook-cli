@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -159,10 +160,21 @@ func (c *Client) CreateDraft(ctx context.Context, d Draft) error {
 
 // Reply sends a reply (or reply-all) to a message with the given comment.
 // If draft is true, creates a draft reply instead of sending immediately.
+// Automatically quotes the original message in the reply body.
 func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all, draft bool) error {
 	if contentType == "" {
 		contentType = "Text"
 	}
+
+	// Fetch the original message to quote it
+	originalMsg, err := c.GetMessage(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Build the full reply body with quoted original message
+	fullBody := buildReplyWithQuote(comment, originalMsg, contentType)
+
 	var action string
 	if draft {
 		action = "/createReply"
@@ -178,7 +190,7 @@ func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all
 	path := "/me/messages/" + url.PathEscape(id) + action
 	payload := map[string]any{
 		"message": map[string]any{
-			"body": ItemBody{ContentType: contentType, Content: comment},
+			"body": ItemBody{ContentType: contentType, Content: fullBody},
 		},
 	}
 	return c.do(ctx, http.MethodPost, path, nil, payload, nil)
@@ -189,4 +201,57 @@ func (c *Client) SetRead(ctx context.Context, id string, read bool) error {
 	path := "/me/messages/" + url.PathEscape(id)
 	payload := map[string]bool{"isRead": read}
 	return c.do(ctx, http.MethodPatch, path, nil, payload, nil)
+}
+
+// buildReplyWithQuote constructs a reply body that includes the user's comment
+// followed by a quoted version of the original message (like Outlook does).
+func buildReplyWithQuote(comment string, original *Message, contentType string) string {
+	// Extract original message details
+	fromAddr := ""
+	if original.From != nil {
+		fromAddr = original.From.String()
+	}
+
+	toAddrs := ""
+	for i, r := range original.ToRecipients {
+		if i > 0 {
+			toAddrs += "; "
+		}
+		toAddrs += r.String()
+	}
+
+	sentTime := original.ReceivedDateTime.Format("Monday, January 2, 2006 3:04 PM")
+	subject := original.Subject
+
+	originalBody := ""
+	if original.Body != nil {
+		originalBody = original.Body.Content
+	}
+
+	if contentType == "HTML" {
+		// HTML format reply with quoted message
+		return comment + "<br><br><hr>" +
+			"<div><b>From:</b> " + htmlEscape(fromAddr) + "<br>" +
+			"<b>Sent:</b> " + sentTime + "<br>" +
+			"<b>To:</b> " + htmlEscape(toAddrs) + "<br>" +
+			"<b>Subject:</b> " + htmlEscape(subject) + "<br></div><br>" +
+			originalBody
+	}
+
+	// Plain text format reply with quoted message
+	return comment + "\n\n________________________________\n" +
+		"From: " + fromAddr + "\n" +
+		"Sent: " + sentTime + "\n" +
+		"To: " + toAddrs + "\n" +
+		"Subject: " + subject + "\n\n" +
+		originalBody
+}
+
+// htmlEscape escapes special HTML characters for safe display
+func htmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	return s
 }

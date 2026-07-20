@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -333,6 +334,18 @@ func TestReplyEndpoints(t *testing.T) {
 		var gotPath string
 		var gotBody map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Handle GET request to fetch original message
+			if r.Method == http.MethodGet && r.URL.Path == "/me/messages/msg-1" {
+				fmt.Fprint(w, `{
+					"id":"msg-1","subject":"Original",
+					"from":{"emailAddress":{"name":"Alice","address":"alice@example.com"}},
+					"toRecipients":[{"emailAddress":{"address":"bob@example.com"}}],
+					"receivedDateTime":"2026-07-01T12:00:00Z",
+					"body":{"contentType":"Text","content":"Original message"}
+				}`)
+				return
+			}
+			// Handle POST request to create reply
 			gotPath = r.URL.Path
 			if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 				t.Fatal(err)
@@ -348,8 +361,12 @@ func TestReplyEndpoints(t *testing.T) {
 		}
 		msg := gotBody["message"].(map[string]any)
 		body := msg["body"].(map[string]any)
-		if body["content"] != "thanks" {
-			t.Errorf("body.content = %q", body["content"])
+		content := body["content"].(string)
+		if !strings.Contains(content, "thanks") {
+			t.Errorf("body.content missing 'thanks': %q", content)
+		}
+		if !strings.Contains(content, "Original message") {
+			t.Errorf("body.content missing quoted original: %q", content)
 		}
 		srv.Close()
 	}
@@ -358,6 +375,18 @@ func TestReplyEndpoints(t *testing.T) {
 func TestReplyWithHTMLContentType(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle GET request to fetch original message
+		if r.Method == http.MethodGet && r.URL.Path == "/me/messages/msg-1" {
+			fmt.Fprint(w, `{
+				"id":"msg-1","subject":"Test",
+				"from":{"emailAddress":{"name":"Alice","address":"alice@example.com"}},
+				"toRecipients":[{"emailAddress":{"address":"bob@example.com"}}],
+				"receivedDateTime":"2026-07-01T12:00:00Z",
+				"body":{"contentType":"HTML","content":"<p>Original HTML</p>"}
+			}`)
+			return
+		}
+		// Handle POST request
 		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 			t.Fatal(err)
 		}
@@ -374,14 +403,30 @@ func TestReplyWithHTMLContentType(t *testing.T) {
 	if body["contentType"] != "HTML" {
 		t.Errorf("contentType = %v, want HTML", body["contentType"])
 	}
-	if body["content"] != "<b>HTML reply</b>" {
-		t.Errorf("content = %v", body["content"])
+	content := body["content"].(string)
+	if !strings.Contains(content, "<b>HTML reply</b>") {
+		t.Errorf("content missing reply: %v", content)
+	}
+	if !strings.Contains(content, "Original HTML") {
+		t.Errorf("content missing quoted original: %v", content)
 	}
 }
 
 func TestReplyDefaultsToText(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle GET request to fetch original message
+		if r.Method == http.MethodGet && r.URL.Path == "/me/messages/msg-1" {
+			fmt.Fprint(w, `{
+				"id":"msg-1","subject":"Test",
+				"from":{"emailAddress":{"name":"Alice","address":"alice@example.com"}},
+				"toRecipients":[{"emailAddress":{"address":"bob@example.com"}}],
+				"receivedDateTime":"2026-07-01T12:00:00Z",
+				"body":{"contentType":"Text","content":"Original text"}
+			}`)
+			return
+		}
+		// Handle POST request
 		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 			t.Fatal(err)
 		}
@@ -398,6 +443,13 @@ func TestReplyDefaultsToText(t *testing.T) {
 	if body["contentType"] != "Text" {
 		t.Errorf("contentType = %v, want Text", body["contentType"])
 	}
+	content := body["content"].(string)
+	if !strings.Contains(content, "Plain reply") {
+		t.Errorf("content missing reply: %v", content)
+	}
+	if !strings.Contains(content, "Original text") {
+		t.Errorf("content missing quoted original: %v", content)
+	}
 }
 
 func TestReplyDraftEndpoints(t *testing.T) {
@@ -412,6 +464,18 @@ func TestReplyDraftEndpoints(t *testing.T) {
 	for _, tt := range tests {
 		var gotPath string
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Handle GET request to fetch original message
+			if r.Method == http.MethodGet && r.URL.Path == "/me/messages/msg-1" {
+				fmt.Fprint(w, `{
+					"id":"msg-1","subject":"Test",
+					"from":{"emailAddress":{"name":"Alice","address":"alice@example.com"}},
+					"toRecipients":[{"emailAddress":{"address":"bob@example.com"}}],
+					"receivedDateTime":"2026-07-01T12:00:00Z",
+					"body":{"contentType":"Text","content":"Original"}
+				}`)
+				return
+			}
+			// Handle POST request
 			gotPath = r.URL.Path
 			w.WriteHeader(http.StatusAccepted)
 		}))
