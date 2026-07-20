@@ -286,6 +286,32 @@ func TestMailSendMissingRequiredFlag(t *testing.T) {
 	}
 }
 
+func TestMailSendWithHTMLFlag(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "send", "--to", "a@b.c", "--subject", "Hi", "--body", "<h1>HTML</h1>", "--html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotBody, `"contentType":"HTML"`) {
+		t.Errorf("body missing HTML contentType: %q", gotBody)
+	}
+	// JSON escapes < and > as \u003c and \u003e
+	if !strings.Contains(gotBody, "HTML") {
+		t.Errorf("body missing HTML content: %q", gotBody)
+	}
+	if !strings.Contains(out.String(), "OK: Message sent.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
 // ── mail draft ─────────────────────────────────────────────────
 
 func TestMailDraftAllFields(t *testing.T) {
@@ -367,6 +393,33 @@ func TestMailDraftInvalidImportance(t *testing.T) {
 	}
 }
 
+func TestMailDraftWithHTMLFlag(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"draft-1"}`)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "draft", "--to", "a@b.c", "--subject", "HTML Draft", "--body", "<p>Content</p>", "--html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotBody, `"contentType":"HTML"`) {
+		t.Errorf("body missing HTML contentType: %q", gotBody)
+	}
+	// JSON escapes < and > as \u003c and \u003e
+	if !strings.Contains(gotBody, "Content") {
+		t.Errorf("body missing HTML content: %q", gotBody)
+	}
+	if !strings.Contains(out.String(), "OK: Draft saved to Drafts folder.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
 // ── mail reply ─────────────────────────────────────────────────
 
 func TestMailReply(t *testing.T) {
@@ -413,6 +466,36 @@ func TestMailReplyAll(t *testing.T) {
 		t.Errorf("reply path = %q", replyPath)
 	}
 	if !strings.Contains(out.String(), "OK: Reply sent to all recipients.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
+func TestMailReplyWithHTMLFlag(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			fmt.Fprint(w, `{"id":"msg-1","from":{"emailAddress":{"address":"a@b.c"}}}`)
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "reply", "msg-1", "--body", "<b>HTML reply</b>", "--html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotBody, `"contentType":"HTML"`) {
+		t.Errorf("body missing HTML contentType: %q", gotBody)
+	}
+	// JSON escapes < and > as \u003c and \u003e
+	if !strings.Contains(gotBody, "HTML reply") {
+		t.Errorf("body missing HTML content: %q", gotBody)
+	}
+	if !strings.Contains(out.String(), "OK: Reply sent to") {
 		t.Errorf("got %q", out.String())
 	}
 }

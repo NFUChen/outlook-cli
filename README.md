@@ -70,19 +70,30 @@ outlook mail read MESSAGE_ID
 outlook mail send --to bob@company.com --subject "Hello" --body "Hi Bob!"
 outlook mail send --to bob@company.com --cc carol@company.com --subject "Update" --body "FYI"
 
+# Send HTML email
+outlook mail send --to bob@company.com --subject "HTML Test" --body "<h1>Hello</h1><p>This is HTML</p>" --html
+
 # Save a draft (does not send)
 outlook mail draft --to bob@company.com --subject "WIP" --body "Draft body"
 outlook mail draft --to a@x.com --to b@x.com --cc c@x.com --bcc d@x.com --subject "Multi" --body "..." --importance high
 
+# Save HTML draft
+outlook mail draft --to bob@company.com --subject "HTML Draft" --body "<p>Draft with <b>HTML</b></p>" --html
+
 # Reply to a message
 outlook mail reply MESSAGE_ID --body "Thanks for the update!"
 outlook mail reply MESSAGE_ID --body "Noted, thanks." --reply-all
+
+# Reply with HTML
+outlook mail reply MESSAGE_ID --body "<p>Thanks for the <em>detailed</em> update!</p>" --html
 
 # Mark as read/unread
 outlook mail mark MESSAGE_ID                             # Mark as read (default)
 outlook mail mark MESSAGE_ID --read                      # Same, explicit
 outlook mail mark MESSAGE_ID --unread                    # Mark as unread
 ```
+
+> **Note on HTML emails**: When using `--html`, you're responsible for providing valid HTML and escaping content as needed. The CLI passes your HTML directly to the Microsoft Graph API.
 
 ### Calendar
 
@@ -164,7 +175,7 @@ outlook mail reply msg-id --reply-all --body "Looks good — approved."
 
 Config and tokens are stored in `~/.outlook-cli/`:
 
-```
+```text
 ~/.outlook-cli/
 ├── config.toml          # client_id, tenant_id
 └── token.json           # OAuth token (auto-managed, auto-refreshed)

@@ -96,10 +96,13 @@ func (c *Client) GetMessage(ctx context.Context, id string) (*Message, error) {
 }
 
 // SendMail composes and sends a new message.
-func (c *Client) SendMail(ctx context.Context, to, cc, subject, body string) error {
+func (c *Client) SendMail(ctx context.Context, to, cc, subject, body, contentType string) error {
+	if contentType == "" {
+		contentType = "Text"
+	}
 	msg := map[string]any{
 		"subject":      subject,
-		"body":         ItemBody{ContentType: "Text", Content: body},
+		"body":         ItemBody{ContentType: contentType, Content: body},
 		"toRecipients": []Recipient{{EmailAddress: EmailAddress{Address: to}}},
 	}
 	if cc != "" {
@@ -114,6 +117,7 @@ type Draft struct {
 	To, Cc, Bcc []string
 	Subject     string
 	Body        string
+	ContentType string
 	Importance  string
 }
 
@@ -132,7 +136,11 @@ func (c *Client) CreateDraft(ctx context.Context, d Draft) error {
 		msg["subject"] = d.Subject
 	}
 	if d.Body != "" {
-		msg["body"] = ItemBody{ContentType: "Text", Content: d.Body}
+		contentType := d.ContentType
+		if contentType == "" {
+			contentType = "Text"
+		}
+		msg["body"] = ItemBody{ContentType: contentType, Content: d.Body}
 	}
 	if len(d.To) > 0 {
 		msg["toRecipients"] = toRecipients(d.To)
@@ -150,13 +158,20 @@ func (c *Client) CreateDraft(ctx context.Context, d Draft) error {
 }
 
 // Reply sends a reply (or reply-all) to a message with the given comment.
-func (c *Client) Reply(ctx context.Context, id, comment string, all bool) error {
+func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all bool) error {
+	if contentType == "" {
+		contentType = "Text"
+	}
 	action := "/reply"
 	if all {
 		action = "/replyAll"
 	}
 	path := "/me/messages/" + url.PathEscape(id) + action
-	payload := map[string]string{"comment": comment}
+	payload := map[string]any{
+		"message": map[string]any{
+			"body": ItemBody{ContentType: contentType, Content: comment},
+		},
+	}
 	return c.do(ctx, http.MethodPost, path, nil, payload, nil)
 }
 
