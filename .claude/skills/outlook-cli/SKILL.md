@@ -31,12 +31,18 @@ outlook mail search [QUERY] [flags]      # List/search messages (default folder:
   --unread --important --has-attachments # Boolean filters, combinable
 
 outlook mail read MESSAGE_ID             # Full message with body (HTML stripped)
-outlook mail send --to EMAIL --subject S --body B [--cc EMAIL] [--html]
+outlook mail send --to EMAIL --subject S --body B [--cc EMAIL] [--html] [--attach FILE]...
 outlook mail draft [--to EMAIL]... [--cc EMAIL]... [--bcc EMAIL]... [--subject S] [--body B] \
-  [--importance low|normal|high] [--html]   # Saves to Drafts, does NOT send; needs at least one field
+  [--importance low|normal|high] [--html] [--attach FILE]...
+  # Saves to Drafts, does NOT send; needs at least one field
 outlook mail reply MESSAGE_ID --body B [--reply-all] [--html] [--draft]
   # --draft: saves reply to Drafts instead of sending immediately
 outlook mail mark MESSAGE_ID [--read|--unread]   # Default: mark as read
+
+# Attachment commands
+outlook mail attachment list MESSAGE_ID              # List all attachments with IDs
+outlook mail attachment download MESSAGE_ID ATT_ID  # Download attachment
+  [-o FILE]                                          # --output: custom filename
 ```
 
 ### Calendar
@@ -60,8 +66,9 @@ outlook cal create --subject S --start "YYYY-MM-DD HH:MM" --end "YYYY-MM-DD HH:M
 2. **IDs come from tables.** `mail search` and `cal list` print an `ID` column (long opaque Graph IDs). Pass them verbatim to `read` / `reply` / `mark`. Never invent or truncate an ID; if you don't have one, search/list first.
 3. **Times are local.** Dates are `YYYY-MM-DD`; `cal create` datetimes are `"YYYY-MM-DD HH:MM"` in the user's local timezone (quote them — they contain a space). Output is also shown in local time.
 4. **HTML emails.** Use `--html` flag with `send`, `draft`, or `reply` to send HTML-formatted emails. Without this flag, body is sent as plain text. When using `--html`, ensure the body contains valid HTML (e.g., `--body "<p>Hello <b>world</b></p>"`).
-5. **Confirm before outbound actions.** Show the user the exact recipient/subject/body (or event details) and get confirmation before running `mail send`, `mail reply`, or `cal create`. Prefer plain `reply` over `--reply-all` unless the user asks.
-6. **Errors** go to stderr as `Error: ...` with exit code 1. `Message not found` / `Event not found` usually means a stale or mistyped ID — re-run the search.
+5. **Attachments.** Use `--attach FILE` (repeatable) with `send` or `draft` to attach files. Files must be < 3MB. To download attachments, first list them with `mail attachment list <ID>` to get attachment IDs, then download with `mail attachment download <MSG_ID> <ATT_ID>`.
+6. **Confirm before outbound actions.** Show the user the exact recipient/subject/body (or event details) and get confirmation before running `mail send`, `mail reply`, or `cal create`. Prefer plain `reply` over `--reply-all` unless the user asks.
+7. **Errors** go to stderr as `Error: ...` with exit code 1. `Message not found` / `Event not found` usually means a stale or mistyped ID — re-run the search.
 
 ## Typical Workflows
 
@@ -90,4 +97,16 @@ outlook cal create --subject "Sync" --start "2026-07-18 14:00" --end "2026-07-18
 ```bash
 outlook mail send --to user@example.com --subject "Report" --body "<h1>Q4 Report</h1><p>See attached.</p>" --html
 outlook mail reply <ID> --body "<p>Thanks for the <strong>detailed</strong> update!</p>" --html
+```
+
+**Work with attachments**
+```bash
+outlook mail search --has-attachments               # Find messages with attachments
+outlook mail attachment list <ID>                   # List attachments on a message
+outlook mail attachment download <ID> <ATT_ID>      # Download to current directory
+outlook mail attachment download <ID> <ATT_ID> -o ~/Downloads/report.pdf  # Custom path
+
+outlook mail send --to user@example.com --subject "Files" --body "See attached" \
+  --attach report.pdf --attach data.xlsx           # Send with multiple attachments
+outlook mail draft --subject "WIP" --attach notes.txt  # Draft with attachment
 ```

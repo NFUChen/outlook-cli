@@ -380,7 +380,7 @@ func TestMailDraftSubjectOnly(t *testing.T) {
 func TestMailDraftNoFieldsErrors(t *testing.T) {
 	app, _, _ := testApp(nil)
 	err := run(app, "mail", "draft")
-	if err == nil || err.Error() != "Nothing to save: provide at least one of --to/--cc/--bcc/--subject/--body." {
+	if err == nil || err.Error() != "Nothing to save: provide at least one of --to/--cc/--bcc/--subject/--body/--attach." {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -866,5 +866,147 @@ func TestAuthStatus(t *testing.T) {
 	}
 	if !strings.Contains(errBuf.String(), "Error: Not authenticated.") {
 		t.Errorf("stderr = %q", errBuf.String())
+	}
+}
+
+// ── mail attachment ────────────────────────────────────────────
+
+func TestMailAttachmentList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/me/messages/msg-1/attachments" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"value":[{
+			"id":"att-1","name":"report.pdf","contentType":"application/pdf","size":12345
+		}]}`)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	if err := run(app, "mail", "attachment", "list", "msg-1"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "report.pdf") {
+		t.Errorf("output missing attachment name:\n%s", out.String())
+	}
+}
+
+func TestMailAttachmentListEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"value":[]}`)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	if err := run(app, "mail", "attachment", "list", "msg-1"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "No attachments found.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
+func TestMailAttachmentDownload(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/me/messages/msg-1/attachments/att-1" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		fmt.Fprint(w, `{
+			"id":"att-1","name":"test.txt","contentType":"text/plain",
+			"size":11,"contentBytes":"SGVsbG8gV29ybGQ="
+		}`)
+	}))
+	defer srv.Close()
+
+	tmpDir := t.TempDir()
+	outFile := filepath.Join(tmpDir, "downloaded.txt")
+
+	app, out, _ := testApp(srv)
+	if err := run(app, "mail", "attachment", "download", "msg-1", "att-1", "-o", outFile); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "OK: Downloaded:") {
+		t.Errorf("got %q", out.String())
+	}
+
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "Hello World" {
+		t.Errorf("content = %q", content)
+	}
+}
+
+func TestMailSendWithAttachment(t *testing.T) {
+	// Create a temp file to attach
+	tmpDir := t.TempDir()
+	attachFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(attachFile, []byte("test content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch {
+		case r.URL.Path == "/me/messages" && r.Method == http.MethodPost:
+			// Create draft
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprint(w, `{"id":"draft-1","subject":"Test"}`)
+		case strings.Contains(r.URL.Path, "/attachments") && r.Method == http.MethodPost:
+			// Add attachment
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprint(w, `{"id":"att-1"}`)
+		case strings.Contains(r.URL.Path, "/send"):
+			// Send draft
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "send", "--to", "a@b.c", "--subject", "Test", "--body", "Body", "--attach", attachFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "OK: Message sent with 1 attachment(s).") {
+		t.Errorf("got %q", out.String())
+	}
+	// Verify the flow: create draft → add attachment → send
+	if len(paths) != 3 {
+		t.Errorf("expected 3 API calls, got %d: %v", len(paths), paths)
+	}
+}
+
+func TestMailDraftWithAttachment(t *testing.T) {
+	// Create a temp file to attach
+	tmpDir := t.TempDir()
+	attachFile := filepath.Join(tmpDir, "doc.pdf")
+	if err := os.WriteFile(attachFile, []byte("pdf content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch {
+		case r.URL.Path == "/me/messages" && r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprint(w, `{"id":"draft-1","subject":"Draft"}`)
+		case strings.Contains(r.URL.Path, "/attachments"):
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprint(w, `{"id":"att-1"}`)
+		}
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "draft", "--subject", "Draft", "--attach", attachFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "OK: Draft saved with 1 attachment(s).") {
+		t.Errorf("got %q", out.String())
 	}
 }

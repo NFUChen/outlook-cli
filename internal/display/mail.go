@@ -1,6 +1,7 @@
 package display
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/mhattingpete/outlook-cli/internal/graph"
@@ -72,6 +73,9 @@ func (p *Printer) MailDetail(m *graph.Message) {
 		lines = append(lines, p.field("CC", strings.Join(ccParts, ", ")))
 	}
 	lines = append(lines, p.field("Date", date))
+	if m.HasAttachments {
+		lines = append(lines, p.field("Attachments", "Yes (use 'mail attachment list' to view)"))
+	}
 
 	body := "(empty)"
 	if m.Body != nil && m.Body.Content != "" {
@@ -83,4 +87,31 @@ func (p *Printer) MailDetail(m *graph.Message) {
 
 	p.panel(m.Subject, lines)
 	p.Println(body)
+}
+
+// AttachmentTable prints a table of attachments.
+func (p *Printer) AttachmentTable(attachments []graph.Attachment) {
+	headers := []string{"Name", "Size", "Type", "ID"}
+	rows := make([][]string, 0, len(attachments))
+	for _, a := range attachments {
+		size := formatSize(a.Size)
+		rows = append(rows, []string{a.Name, size, a.ContentType, a.ID})
+	}
+	p.table("Attachments", headers, rows)
+}
+
+// formatSize formats bytes into human-readable size.
+func formatSize(bytes int) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+	)
+	switch {
+	case bytes >= MB:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/MB)
+	case bytes >= KB:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/KB)
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
 }

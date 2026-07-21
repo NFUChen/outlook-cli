@@ -41,16 +41,30 @@ type ItemBody struct {
 
 // Message is a Graph message.
 type Message struct {
-	ID               string      `json:"id"`
-	Subject          string      `json:"subject"`
-	From             *Recipient  `json:"from"`
-	ToRecipients     []Recipient `json:"toRecipients"`
-	CcRecipients     []Recipient `json:"ccRecipients"`
-	ReceivedDateTime time.Time   `json:"receivedDateTime"`
-	IsRead           bool        `json:"isRead"`
-	Importance       string      `json:"importance"`
-	HasAttachments   bool        `json:"hasAttachments"`
-	Body             *ItemBody   `json:"body"`
+	ID               string       `json:"id"`
+	Subject          string       `json:"subject"`
+	From             *Recipient   `json:"from"`
+	ToRecipients     []Recipient  `json:"toRecipients"`
+	CcRecipients     []Recipient  `json:"ccRecipients"`
+	ReceivedDateTime time.Time    `json:"receivedDateTime"`
+	IsRead           bool         `json:"isRead"`
+	Importance       string       `json:"importance"`
+	HasAttachments   bool         `json:"hasAttachments"`
+	Body             *ItemBody    `json:"body"`
+	Attachments      []Attachment `json:"attachments,omitempty"`
+}
+
+// Attachment is a Graph attachment object.
+type Attachment struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	ContentType   string `json:"contentType"`
+	Size          int    `json:"size"`
+	IsInline      bool   `json:"isInline"`
+	ContentBytes  string `json:"contentBytes,omitempty"` // base64 encoded
+	ODataType     string `json:"@odata.type,omitempty"`
+	ContentID     string `json:"contentId,omitempty"`
+	LastModified  string `json:"lastModifiedDateTime,omitempty"`
 }
 
 type mailFolder struct {
@@ -122,6 +136,12 @@ type Draft struct {
 	Importance  string
 }
 
+// DraftMessage is the response when creating a draft.
+type DraftMessage struct {
+	ID      string `json:"id"`
+	Subject string `json:"subject"`
+}
+
 func toRecipients(addrs []string) []Recipient {
 	rs := make([]Recipient, len(addrs))
 	for i, a := range addrs {
@@ -131,7 +151,8 @@ func toRecipients(addrs []string) []Recipient {
 }
 
 // CreateDraft saves a new message to the Drafts folder without sending it.
-func (c *Client) CreateDraft(ctx context.Context, d Draft) error {
+// Returns the created draft message with its ID.
+func (c *Client) CreateDraft(ctx context.Context, d Draft) (*DraftMessage, error) {
 	msg := map[string]any{}
 	if d.Subject != "" {
 		msg["subject"] = d.Subject
@@ -155,7 +176,17 @@ func (c *Client) CreateDraft(ctx context.Context, d Draft) error {
 	if d.Importance != "" {
 		msg["importance"] = d.Importance
 	}
-	return c.do(ctx, http.MethodPost, "/me/messages", nil, msg, nil)
+	var out DraftMessage
+	if err := c.do(ctx, http.MethodPost, "/me/messages", nil, msg, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SendDraft sends an existing draft message.
+func (c *Client) SendDraft(ctx context.Context, msgID string) error {
+	path := "/me/messages/" + url.PathEscape(msgID) + "/send"
+	return c.do(ctx, http.MethodPost, path, nil, nil, nil)
 }
 
 // Reply sends a reply (or reply-all) to a message with the given comment.
@@ -201,6 +232,39 @@ func (c *Client) SetRead(ctx context.Context, id string, read bool) error {
 	path := "/me/messages/" + url.PathEscape(id)
 	payload := map[string]bool{"isRead": read}
 	return c.do(ctx, http.MethodPatch, path, nil, payload, nil)
+}
+
+// ListAttachments lists all attachments for a message.
+func (c *Client) ListAttachments(ctx context.Context, msgID string) ([]Attachment, error) {
+	var out listResponse[Attachment]
+	path := "/me/messages/" + url.PathEscape(msgID) + "/attachments"
+	if err := c.do(ctx, http.MethodGet, path, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Value, nil
+}
+
+// GetAttachment fetches a single attachment by ID, including content bytes.
+func (c *Client) GetAttachment(ctx context.Context, msgID, attID string) (*Attachment, error) {
+	var att Attachment
+	path := "/me/messages/" + url.PathEscape(msgID) + "/attachments/" + url.PathEscape(attID)
+	if err := c.do(ctx, http.MethodGet, path, nil, nil, &att); err != nil {
+		return nil, err
+	}
+	return &att, nil
+}
+
+// AddAttachment adds a file attachment to a message (typically a draft).
+// For files < 3MB, uses direct upload. Content should be base64-encoded.
+func (c *Client) AddAttachment(ctx context.Context, msgID, name, contentType, contentBase64 string) error {
+	path := "/me/messages/" + url.PathEscape(msgID) + "/attachments"
+	payload := map[string]any{
+		"@odata.type":  "#microsoft.graph.fileAttachment",
+		"name":         name,
+		"contentType":  contentType,
+		"contentBytes": contentBase64,
+	}
+	return c.do(ctx, http.MethodPost, path, nil, payload, nil)
 }
 
 // buildReplyWithQuote constructs a reply body that includes the user's comment
