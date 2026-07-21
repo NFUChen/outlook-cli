@@ -241,7 +241,7 @@ func TestCreateDraftRequest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := testClient(srv).CreateDraft(context.Background(), Draft{
+	_, err := testClient(srv).CreateDraft(context.Background(), Draft{
 		To:         []string{"alice@example.com", "bob@example.com"},
 		Cc:         []string{"carol@example.com"},
 		Bcc:        []string{"dave@example.com"},
@@ -285,7 +285,7 @@ func TestCreateDraftOmitsEmptyFields(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := testClient(srv).CreateDraft(context.Background(), Draft{Subject: "Ideas"}); err != nil {
+	if _, err := testClient(srv).CreateDraft(context.Background(), Draft{Subject: "Ideas"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(gotBody) != 1 || gotBody["subject"] != "Ideas" {
@@ -304,7 +304,7 @@ func TestCreateDraftWithHTMLContentType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := testClient(srv).CreateDraft(context.Background(), Draft{
+	_, err := testClient(srv).CreateDraft(context.Background(), Draft{
 		To:          []string{"alice@example.com"},
 		Subject:     "HTML Draft",
 		Body:        "<p>Draft content</p>",
@@ -353,7 +353,7 @@ func TestReplyEndpoints(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 		}))
 
-		if err := testClient(srv).Reply(context.Background(), "msg-1", "thanks", "", tt.all, false); err != nil {
+		if _, err := testClient(srv).Reply(context.Background(), "msg-1", "thanks", "", tt.all, false); err != nil {
 			t.Fatal(err)
 		}
 		if gotPath != tt.wantPath {
@@ -394,7 +394,7 @@ func TestReplyWithHTMLContentType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := testClient(srv).Reply(context.Background(), "msg-1", "<b>HTML reply</b>", "HTML", false, false)
+	_, err := testClient(srv).Reply(context.Background(), "msg-1", "<b>HTML reply</b>", "HTML", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestReplyDefaultsToText(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := testClient(srv).Reply(context.Background(), "msg-1", "Plain reply", "", true, false)
+	_, err := testClient(srv).Reply(context.Background(), "msg-1", "Plain reply", "", true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestReplyDraftEndpoints(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 		}))
 
-		if err := testClient(srv).Reply(context.Background(), "msg-1", "draft reply", "", tt.all, tt.draft); err != nil {
+		if _, err := testClient(srv).Reply(context.Background(), "msg-1", "draft reply", "", tt.all, tt.draft); err != nil {
 			t.Fatal(err)
 		}
 		if gotPath != tt.wantPath {
@@ -637,4 +637,104 @@ func mustTimeUTC(t *testing.T, s string) time.Time {
 		t.Fatal(err)
 	}
 	return tm
+}
+
+func TestListAttachments(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/me/messages/msg-1/attachments" {
+			t.Errorf("%s %s", r.Method, r.URL.Path)
+		}
+		fmt.Fprint(w, `{"value":[{
+			"id":"att-1","name":"report.pdf","contentType":"application/pdf",
+			"size":12345,"isInline":false
+		},{
+			"id":"att-2","name":"image.png","contentType":"image/png",
+			"size":5678,"isInline":true
+		}]}`)
+	}))
+	defer srv.Close()
+
+	attachments, err := testClient(srv).ListAttachments(context.Background(), "msg-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attachments) != 2 {
+		t.Fatalf("got %d attachments", len(attachments))
+	}
+	if attachments[0].Name != "report.pdf" || attachments[0].Size != 12345 {
+		t.Errorf("attachment[0] = %+v", attachments[0])
+	}
+	if attachments[1].Name != "image.png" || !attachments[1].IsInline {
+		t.Errorf("attachment[1] = %+v", attachments[1])
+	}
+}
+
+func TestGetAttachment(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/me/messages/msg-1/attachments/att-1" {
+			t.Errorf("%s %s", r.Method, r.URL.Path)
+		}
+		fmt.Fprint(w, `{
+			"id":"att-1","name":"test.txt","contentType":"text/plain",
+			"size":11,"contentBytes":"SGVsbG8gV29ybGQ="
+		}`)
+	}))
+	defer srv.Close()
+
+	att, err := testClient(srv).GetAttachment(context.Background(), "msg-1", "att-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if att.Name != "test.txt" || att.ContentBytes != "SGVsbG8gV29ybGQ=" {
+		t.Errorf("attachment = %+v", att)
+	}
+}
+
+func TestAddAttachment(t *testing.T) {
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/me/messages/msg-1/attachments" {
+			t.Errorf("%s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"att-new"}`)
+	}))
+	defer srv.Close()
+
+	err := testClient(srv).AddAttachment(context.Background(), "msg-1", "doc.pdf", "application/pdf", "YmFzZTY0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotBody["@odata.type"] != "#microsoft.graph.fileAttachment" {
+		t.Errorf("@odata.type = %v", gotBody["@odata.type"])
+	}
+	if gotBody["name"] != "doc.pdf" {
+		t.Errorf("name = %v", gotBody["name"])
+	}
+	if gotBody["contentBytes"] != "YmFzZTY0" {
+		t.Errorf("contentBytes = %v", gotBody["contentBytes"])
+	}
+}
+
+func TestSendDraft(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s", r.Method)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	err := testClient(srv).SendDraft(context.Background(), "draft-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/me/messages/draft-1/send" {
+		t.Errorf("path = %q", gotPath)
+	}
 }

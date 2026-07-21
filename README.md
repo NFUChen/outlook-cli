@@ -87,6 +87,9 @@ outlook mail reply MESSAGE_ID --body "Noted, thanks." --reply-all
 # Reply with HTML
 outlook mail reply MESSAGE_ID --body "<p>Thanks for the <em>detailed</em> update!</p>" --html
 
+# Reply with attachment
+outlook mail reply MESSAGE_ID --body "See attached" --attach response.pdf
+
 # Create reply draft (saves to Drafts without sending)
 outlook mail reply MESSAGE_ID --body "Let me review this first" --draft
 outlook mail reply MESSAGE_ID --body "<b>Draft reply</b>" --draft --html --reply-all
@@ -95,6 +98,20 @@ outlook mail reply MESSAGE_ID --body "<b>Draft reply</b>" --draft --html --reply
 outlook mail mark MESSAGE_ID                             # Mark as read (default)
 outlook mail mark MESSAGE_ID --read                      # Same, explicit
 outlook mail mark MESSAGE_ID --unread                    # Mark as unread
+
+# Attachments - send with attachments
+outlook mail send --to bob@company.com --subject "Report" --body "See attached" --attach report.pdf
+outlook mail send --to bob@company.com --subject "Files" --body "Multiple files" --attach doc1.pdf --attach doc2.xlsx
+
+# Attachments - draft with attachments
+outlook mail draft --to bob@company.com --subject "WIP" --body "Draft with files" --attach notes.txt
+
+# Attachments - list attachments on a message
+outlook mail attachment list MESSAGE_ID
+
+# Attachments - download an attachment
+outlook mail attachment download MESSAGE_ID ATTACHMENT_ID
+outlook mail attachment download MESSAGE_ID ATTACHMENT_ID --output ~/Downloads/renamed.pdf
 ```
 
 > **Note on HTML emails**: When using `--html`, you're responsible for providing valid HTML and escaping content as needed. The CLI passes your HTML directly to the Microsoft Graph API.
