@@ -149,6 +149,7 @@ func newMailReadCmd(app *App) *cobra.Command {
 
 func newMailSendCmd(app *App) *cobra.Command {
 	var to, subject, body, cc string
+	var html bool
 	c := &cobra.Command{
 		Use:   "send",
 		Short: "Compose and send a new message.",
@@ -157,7 +158,11 @@ func newMailSendCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := client.SendMail(cmd.Context(), to, cc, subject, body); err != nil {
+			contentType := "Text"
+			if html {
+				contentType = "HTML"
+			}
+			if err := client.SendMail(cmd.Context(), to, cc, subject, body, contentType); err != nil {
 				return err
 			}
 			app.Printer.Success("Message sent.")
@@ -168,6 +173,7 @@ func newMailSendCmd(app *App) *cobra.Command {
 	c.Flags().StringVar(&subject, "subject", "", "Message subject")
 	c.Flags().StringVar(&body, "body", "", "Message body text")
 	c.Flags().StringVar(&cc, "cc", "", "CC email address")
+	c.Flags().BoolVar(&html, "html", false, "Send body as HTML instead of plain text")
 	_ = c.MarkFlagRequired("to")
 	_ = c.MarkFlagRequired("subject")
 	_ = c.MarkFlagRequired("body")
@@ -177,6 +183,7 @@ func newMailSendCmd(app *App) *cobra.Command {
 func newMailDraftCmd(app *App) *cobra.Command {
 	var to, cc, bcc []string
 	var subject, body, importance string
+	var html bool
 	c := &cobra.Command{
 		Use:   "draft",
 		Short: "Compose a new message and save it as a draft (does not send).",
@@ -197,9 +204,13 @@ func newMailDraftCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			contentType := "Text"
+			if html {
+				contentType = "HTML"
+			}
 			draft := graph.Draft{
 				To: to, Cc: cc, Bcc: bcc,
-				Subject: subject, Body: body, Importance: importance,
+				Subject: subject, Body: body, ContentType: contentType, Importance: importance,
 			}
 			if err := client.CreateDraft(cmd.Context(), draft); err != nil {
 				return err
@@ -215,12 +226,15 @@ func newMailDraftCmd(app *App) *cobra.Command {
 	flags.StringVar(&subject, "subject", "", "Message subject")
 	flags.StringVar(&body, "body", "", "Message body text")
 	flags.StringVar(&importance, "importance", "", "Importance: low, normal, or high")
+	flags.BoolVar(&html, "html", false, "Format body as HTML instead of plain text")
 	return c
 }
 
 func newMailReplyCmd(app *App) *cobra.Command {
 	var body string
 	var replyAll bool
+	var html bool
+	var draft bool
 	c := &cobra.Command{
 		Use:   "reply MESSAGE_ID",
 		Short: "Reply to a message by ID.",
@@ -240,20 +254,30 @@ func newMailReplyCmd(app *App) *cobra.Command {
 				return err
 			}
 
-			if err := client.Reply(ctx, args[0], body, replyAll); err != nil {
+			contentType := "Text"
+			if html {
+				contentType = "HTML"
+			}
+			if err := client.Reply(ctx, args[0], body, contentType, replyAll, draft); err != nil {
 				return err
 			}
 
-			target := "all recipients"
-			if !replyAll && msg.From != nil {
-				target = msg.From.String()
+			if draft {
+				app.Printer.Success("Reply draft saved to Drafts folder.")
+			} else {
+				target := "all recipients"
+				if !replyAll && msg.From != nil {
+					target = msg.From.String()
+				}
+				app.Printer.Success(fmt.Sprintf("Reply sent to %s.", target))
 			}
-			app.Printer.Success(fmt.Sprintf("Reply sent to %s.", target))
 			return nil
 		},
 	}
 	c.Flags().StringVar(&body, "body", "", "Reply body text")
 	c.Flags().BoolVar(&replyAll, "reply-all", false, "Reply to all recipients")
+	c.Flags().BoolVar(&html, "html", false, "Format reply body as HTML instead of plain text")
+	c.Flags().BoolVar(&draft, "draft", false, "Save as draft instead of sending immediately")
 	_ = c.MarkFlagRequired("body")
 	return c
 }
