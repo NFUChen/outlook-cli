@@ -87,6 +87,9 @@ outlook mail reply MESSAGE_ID --body "Noted, thanks." --reply-all
 # Reply with HTML
 outlook mail reply MESSAGE_ID --body "<p>Thanks for the <em>detailed</em> update!</p>" --html
 
+# Reply with attachment
+outlook mail reply MESSAGE_ID --body "See attached" --attach response.pdf
+
 # Create reply draft (saves to Drafts without sending)
 outlook mail reply MESSAGE_ID --body "Let me review this first" --draft
 outlook mail reply MESSAGE_ID --body "<b>Draft reply</b>" --draft --html --reply-all

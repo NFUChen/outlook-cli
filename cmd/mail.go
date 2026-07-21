@@ -339,6 +339,7 @@ func newMailReplyCmd(app *App) *cobra.Command {
 	var replyAll bool
 	var html bool
 	var draft bool
+	var attachments []string
 	c := &cobra.Command{
 		Use:   "reply MESSAGE_ID",
 		Short: "Reply to a message by ID.",
@@ -362,7 +363,43 @@ func newMailReplyCmd(app *App) *cobra.Command {
 			if html {
 				contentType = "HTML"
 			}
-			if err := client.Reply(ctx, args[0], body, contentType, replyAll, draft); err != nil {
+
+			// If attachments, must create draft first, add attachments, then optionally send
+			if len(attachments) > 0 {
+				files, err := readAttachments(attachments)
+				if err != nil {
+					return err
+				}
+
+				// Create reply draft
+				draftMsg, err := client.Reply(ctx, args[0], body, contentType, replyAll, true)
+				if err != nil {
+					return err
+				}
+
+				// Add attachments
+				if err := addAttachmentsToMessage(ctx, client, draftMsg.ID, files); err != nil {
+					return err
+				}
+
+				if draft {
+					app.Printer.Success(fmt.Sprintf("Reply draft saved with %d attachment(s).", len(files)))
+				} else {
+					// Send the draft
+					if err := client.SendDraft(ctx, draftMsg.ID); err != nil {
+						return err
+					}
+					target := "all recipients"
+					if !replyAll && msg.From != nil {
+						target = msg.From.String()
+					}
+					app.Printer.Success(fmt.Sprintf("Reply sent to %s with %d attachment(s).", target, len(files)))
+				}
+				return nil
+			}
+
+			// No attachments - use standard reply flow
+			if _, err := client.Reply(ctx, args[0], body, contentType, replyAll, draft); err != nil {
 				return err
 			}
 
@@ -382,6 +419,7 @@ func newMailReplyCmd(app *App) *cobra.Command {
 	c.Flags().BoolVar(&replyAll, "reply-all", false, "Reply to all recipients")
 	c.Flags().BoolVar(&html, "html", false, "Format reply body as HTML instead of plain text")
 	c.Flags().BoolVar(&draft, "draft", false, "Save as draft instead of sending immediately")
+	c.Flags().StringArrayVar(&attachments, "attach", nil, "File to attach (repeatable)")
 	_ = c.MarkFlagRequired("body")
 	return c
 }

@@ -353,7 +353,7 @@ func TestReplyEndpoints(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 		}))
 
-		if err := testClient(srv).Reply(context.Background(), "msg-1", "thanks", "", tt.all, false); err != nil {
+		if _, err := testClient(srv).Reply(context.Background(), "msg-1", "thanks", "", tt.all, false); err != nil {
 			t.Fatal(err)
 		}
 		if gotPath != tt.wantPath {
@@ -394,7 +394,7 @@ func TestReplyWithHTMLContentType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := testClient(srv).Reply(context.Background(), "msg-1", "<b>HTML reply</b>", "HTML", false, false)
+	_, err := testClient(srv).Reply(context.Background(), "msg-1", "<b>HTML reply</b>", "HTML", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestReplyDefaultsToText(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := testClient(srv).Reply(context.Background(), "msg-1", "Plain reply", "", true, false)
+	_, err := testClient(srv).Reply(context.Background(), "msg-1", "Plain reply", "", true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestReplyDraftEndpoints(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 		}))
 
-		if err := testClient(srv).Reply(context.Background(), "msg-1", "draft reply", "", tt.all, tt.draft); err != nil {
+		if _, err := testClient(srv).Reply(context.Background(), "msg-1", "draft reply", "", tt.all, tt.draft); err != nil {
 			t.Fatal(err)
 		}
 		if gotPath != tt.wantPath {

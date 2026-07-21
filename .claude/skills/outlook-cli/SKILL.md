@@ -35,7 +35,7 @@ outlook mail send --to EMAIL --subject S --body B [--cc EMAIL] [--html] [--attac
 outlook mail draft [--to EMAIL]... [--cc EMAIL]... [--bcc EMAIL]... [--subject S] [--body B] \
   [--importance low|normal|high] [--html] [--attach FILE]...
   # Saves to Drafts, does NOT send; needs at least one field
-outlook mail reply MESSAGE_ID --body B [--reply-all] [--html] [--draft]
+outlook mail reply MESSAGE_ID --body B [--reply-all] [--html] [--draft] [--attach FILE]...
   # --draft: saves reply to Drafts instead of sending immediately
 outlook mail mark MESSAGE_ID [--read|--unread]   # Default: mark as read
 

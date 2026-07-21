@@ -2,11 +2,37 @@ package graph
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
+
+var (
+	brRe     = regexp.MustCompile(`<br\s*/?>`)
+	pOpenRe  = regexp.MustCompile(`<p[^>]*>`)
+	pCloseRe = regexp.MustCompile(`</p>`)
+	tagRe    = regexp.MustCompile(`<[^>]+>`)
+	htmlRe   = regexp.MustCompile(`(?i)<(html|div|p|br|table)\b`)
+)
+
+// stripHTML removes HTML tags for plain text display.
+func stripHTML(text string) string {
+	clean := brRe.ReplaceAllString(text, "\n")
+	clean = pOpenRe.ReplaceAllString(clean, "\n")
+	clean = pCloseRe.ReplaceAllString(clean, "")
+	clean = tagRe.ReplaceAllString(clean, "")
+	clean = strings.ReplaceAll(clean, "&nbsp;", " ")
+	clean = html.UnescapeString(clean)
+	return strings.TrimSpace(clean)
+}
+
+// looksLikeHTML reports whether text appears to contain HTML markup.
+func looksLikeHTML(text string) bool {
+	return htmlRe.MatchString(text)
+}
 
 // EmailAddress is a Graph emailAddress object.
 type EmailAddress struct {
@@ -190,9 +216,9 @@ func (c *Client) SendDraft(ctx context.Context, msgID string) error {
 }
 
 // Reply sends a reply (or reply-all) to a message with the given comment.
-// If draft is true, creates a draft reply instead of sending immediately.
+// If draft is true, creates a draft reply instead of sending immediately and returns the draft.
 // Automatically quotes the original message in the reply body.
-func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all, draft bool) error {
+func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all, draft bool) (*DraftMessage, error) {
 	if contentType == "" {
 		contentType = "Text"
 	}
@@ -200,7 +226,7 @@ func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all
 	// Fetch the original message to quote it
 	originalMsg, err := c.GetMessage(ctx, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Build the full reply body with quoted original message
@@ -224,7 +250,16 @@ func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all
 			"body": ItemBody{ContentType: contentType, Content: fullBody},
 		},
 	}
-	return c.do(ctx, http.MethodPost, path, nil, payload, nil)
+
+	if draft {
+		var out DraftMessage
+		if err := c.do(ctx, http.MethodPost, path, nil, payload, &out); err != nil {
+			return nil, err
+		}
+		return &out, nil
+	}
+
+	return nil, c.do(ctx, http.MethodPost, path, nil, payload, nil)
 }
 
 // SetRead marks a message as read or unread.
@@ -300,6 +335,11 @@ func buildReplyWithQuote(comment string, original *Message, contentType string) 
 			"<b>To:</b> " + htmlEscape(toAddrs) + "<br>" +
 			"<b>Subject:</b> " + htmlEscape(subject) + "<br></div><br>" +
 			originalBody
+	}
+
+	// Plain text format reply - strip HTML if original was HTML
+	if looksLikeHTML(originalBody) {
+		originalBody = stripHTML(originalBody)
 	}
 
 	// Plain text format reply with quoted message
