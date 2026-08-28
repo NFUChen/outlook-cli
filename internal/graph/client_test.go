@@ -490,6 +490,79 @@ func TestReplyDraftEndpoints(t *testing.T) {
 	}
 }
 
+func TestForwardEndpoint(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	_, err := testClient(srv).Forward(context.Background(), "msg-1", []string{"bob@example.com"}, nil, "FYI", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/me/messages/msg-1/forward" {
+		t.Errorf("path = %q, want /me/messages/msg-1/forward", gotPath)
+	}
+	if gotBody["comment"] != "FYI" {
+		t.Errorf("comment = %v", gotBody["comment"])
+	}
+	to := gotBody["toRecipients"].([]any)
+	if len(to) != 1 {
+		t.Errorf("toRecipients = %v", to)
+	}
+	if _, ok := gotBody["message"]; ok {
+		t.Error("message should be omitted when no cc given")
+	}
+}
+
+func TestForwardWithCC(t *testing.T) {
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	_, err := testClient(srv).Forward(context.Background(), "msg-1", []string{"bob@example.com"}, []string{"carol@example.com"}, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := gotBody["message"].(map[string]any)
+	cc := msg["ccRecipients"].([]any)
+	if len(cc) != 1 {
+		t.Errorf("ccRecipients = %v", cc)
+	}
+}
+
+func TestForwardDraftEndpoint(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"draft-1","subject":"Fwd: Hello"}`)
+	}))
+	defer srv.Close()
+
+	out, err := testClient(srv).Forward(context.Background(), "msg-1", []string{"bob@example.com"}, nil, "See below", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/me/messages/msg-1/createForward" {
+		t.Errorf("path = %q, want /me/messages/msg-1/createForward", gotPath)
+	}
+	if out.ID != "draft-1" {
+		t.Errorf("draft ID = %q", out.ID)
+	}
+}
+
 func TestSetRead(t *testing.T) {
 	var gotMethod string
 	var gotBody map[string]bool

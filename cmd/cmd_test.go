@@ -550,6 +550,77 @@ func TestMailReplyWithDraftAndReplyAll(t *testing.T) {
 	}
 }
 
+// ── mail forward ───────────────────────────────────────────────
+
+func TestMailForward(t *testing.T) {
+	var forwardPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwardPath = r.URL.Path
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	if err := run(app, "mail", "forward", "msg-1", "--to", "bob@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if forwardPath != "/me/messages/msg-1/forward" {
+		t.Errorf("forward path = %q", forwardPath)
+	}
+	if !strings.Contains(out.String(), "OK: Message forwarded to bob@example.com.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
+func TestMailForwardWithDraftFlag(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"draft-1"}`)
+	}))
+	defer srv.Close()
+
+	app, out, _ := testApp(srv)
+	err := run(app, "mail", "forward", "msg-1", "--to", "bob@example.com", "--draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/me/messages/msg-1/createForward" {
+		t.Errorf("path = %q, want /me/messages/msg-1/createForward", gotPath)
+	}
+	if !strings.Contains(out.String(), "OK: Forward draft saved to Drafts folder.") {
+		t.Errorf("got %q", out.String())
+	}
+}
+
+func TestMailForwardWithCC(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	app, _, _ := testApp(srv)
+	err := run(app, "mail", "forward", "msg-1", "--to", "bob@example.com", "--cc", "carol@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotBody, "carol@example.com") {
+		t.Errorf("body missing cc: %q", gotBody)
+	}
+}
+
+func TestMailForwardRequiresTo(t *testing.T) {
+	app, _, _ := testApp(nil)
+	err := run(app, "mail", "forward", "msg-1")
+	if err == nil {
+		t.Fatal("expected error for missing --to")
+	}
+}
+
 // ── mail mark ──────────────────────────────────────────────────
 
 func TestMailMarkDefaultsToRead(t *testing.T) {

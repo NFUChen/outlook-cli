@@ -94,6 +94,16 @@ outlook mail reply MESSAGE_ID --body "See attached" --attach response.pdf
 outlook mail reply MESSAGE_ID --body "Let me review this first" --draft
 outlook mail reply MESSAGE_ID --body "<b>Draft reply</b>" --draft --html --reply-all
 
+# Forward a message
+outlook mail forward MESSAGE_ID --to bob@company.com
+outlook mail forward MESSAGE_ID --to bob@company.com --cc carol@company.com --body "See below"
+
+# Forward with attachment
+outlook mail forward MESSAGE_ID --to bob@company.com --attach response.pdf
+
+# Create forward draft (saves to Drafts without sending)
+outlook mail forward MESSAGE_ID --to bob@company.com --body "FYI" --draft
+
 # Mark as read/unread
 outlook mail mark MESSAGE_ID                             # Mark as read (default)
 outlook mail mark MESSAGE_ID --read                      # Same, explicit

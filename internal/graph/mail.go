@@ -262,6 +262,34 @@ func (c *Client) Reply(ctx context.Context, id, comment, contentType string, all
 	return nil, c.do(ctx, http.MethodPost, path, nil, payload, nil)
 }
 
+// Forward forwards a message to the given recipients with an optional comment.
+// If draft is true, creates a draft forward instead of sending immediately and returns the draft.
+func (c *Client) Forward(ctx context.Context, id string, to, cc []string, comment string, draft bool) (*DraftMessage, error) {
+	payload := map[string]any{
+		"comment":      comment,
+		"toRecipients": toRecipients(to),
+	}
+	if len(cc) > 0 {
+		payload["message"] = map[string]any{"ccRecipients": toRecipients(cc)}
+	}
+
+	action := "/forward"
+	if draft {
+		action = "/createForward"
+	}
+	path := "/me/messages/" + url.PathEscape(id) + action
+
+	if draft {
+		var out DraftMessage
+		if err := c.do(ctx, http.MethodPost, path, nil, payload, &out); err != nil {
+			return nil, err
+		}
+		return &out, nil
+	}
+
+	return nil, c.do(ctx, http.MethodPost, path, nil, payload, nil)
+}
+
 // SetRead marks a message as read or unread.
 func (c *Client) SetRead(ctx context.Context, id string, read bool) error {
 	path := "/me/messages/" + url.PathEscape(id)

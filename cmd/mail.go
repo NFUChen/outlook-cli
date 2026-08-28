@@ -69,6 +69,7 @@ func newMailCmd(app *App) *cobra.Command {
 		newMailSendCmd(app),
 		newMailDraftCmd(app),
 		newMailReplyCmd(app),
+		newMailForwardCmd(app),
 		newMailMarkCmd(app),
 		newMailAttachmentCmd(app),
 	)
@@ -421,6 +422,78 @@ func newMailReplyCmd(app *App) *cobra.Command {
 	c.Flags().BoolVar(&draft, "draft", false, "Save as draft instead of sending immediately")
 	c.Flags().StringArrayVar(&attachments, "attach", nil, "File to attach (repeatable)")
 	_ = c.MarkFlagRequired("body")
+	return c
+}
+
+func newMailForwardCmd(app *App) *cobra.Command {
+	var to, cc []string
+	var body string
+	var draft bool
+	var attachments []string
+	c := &cobra.Command{
+		Use:   "forward MESSAGE_ID",
+		Short: "Forward a message by ID.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := app.NewClient()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+
+			// If attachments, must create draft first, add attachments, then optionally send
+			if len(attachments) > 0 {
+				files, err := readAttachments(attachments)
+				if err != nil {
+					return err
+				}
+
+				draftMsg, err := client.Forward(ctx, args[0], to, cc, body, true)
+				if errors.Is(err, graph.ErrNotFound) {
+					return fmt.Errorf("Message not found: %s", args[0])
+				}
+				if err != nil {
+					return err
+				}
+
+				if err := addAttachmentsToMessage(ctx, client, draftMsg.ID, files); err != nil {
+					return err
+				}
+
+				if draft {
+					app.Printer.Success(fmt.Sprintf("Forward draft saved with %d attachment(s).", len(files)))
+				} else {
+					if err := client.SendDraft(ctx, draftMsg.ID); err != nil {
+						return err
+					}
+					app.Printer.Success(fmt.Sprintf("Message forwarded to %s with %d attachment(s).", strings.Join(to, ", "), len(files)))
+				}
+				return nil
+			}
+
+			// No attachments - use standard forward flow
+			_, err = client.Forward(ctx, args[0], to, cc, body, draft)
+			if errors.Is(err, graph.ErrNotFound) {
+				return fmt.Errorf("Message not found: %s", args[0])
+			}
+			if err != nil {
+				return err
+			}
+
+			if draft {
+				app.Printer.Success("Forward draft saved to Drafts folder.")
+			} else {
+				app.Printer.Success(fmt.Sprintf("Message forwarded to %s.", strings.Join(to, ", ")))
+			}
+			return nil
+		},
+	}
+	c.Flags().StringArrayVar(&to, "to", nil, "Recipient email address (repeatable)")
+	c.Flags().StringArrayVar(&cc, "cc", nil, "CC email address (repeatable)")
+	c.Flags().StringVar(&body, "body", "", "Optional comment to include")
+	c.Flags().BoolVar(&draft, "draft", false, "Save as draft instead of forwarding immediately")
+	c.Flags().StringArrayVar(&attachments, "attach", nil, "File to attach (repeatable)")
+	_ = c.MarkFlagRequired("to")
 	return c
 }
 

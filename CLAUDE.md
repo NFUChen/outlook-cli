@@ -21,7 +21,7 @@ cmd/
 ├── root.go                  # App struct (injectable deps), root command, Execute()
 ├── helpers.go               # defaultNewClient (config+token → graph.Client), date parsing
 ├── auth.go                  # outlook auth login|logout|status
-├── mail.go                  # outlook mail search|read|send|draft|reply|mark
+├── mail.go                  # outlook mail search|read|send|draft|reply|forward|mark
 └── cal.go                   # outlook cal list|read|create
 internal/
 ├── config/config.go         # Config{ClientID, TenantID}, ~/.outlook-cli/config.toml (dir 0700, file 0600)
@@ -32,7 +32,7 @@ internal/
 ├── graph/
 │   ├── client.go            # Client{HTTP, BaseURL, Tokens}, do() JSON helper, APIError, ErrNotFound
 │   ├── query.go             # MailQuery/EventQuery → url.Values ($search/$filter/$top/$orderby/$select)
-│   ├── mail.go              # ResolveFolder, ListMessages, GetMessage, SendMail, CreateDraft, Reply, SetRead
+│   ├── mail.go              # ResolveFolder, ListMessages, GetMessage, SendMail, CreateDraft, Reply, Forward, SetRead
 │   └── calendar.go          # ListEvents, GetEvent, CreateEvent
 └── display/
     ├── display.go           # Printer{Out, Err, Color}: Error/Success/Warn, table, panel
