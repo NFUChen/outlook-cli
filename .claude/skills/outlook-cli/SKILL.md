@@ -1,6 +1,6 @@
 ---
 name: outlook-cli
-description: Operate Microsoft Outlook (Work/School) from the terminal via the `outlook` CLI — search/read/send/draft/reply to email, mark read/unread, and list/read/create calendar events. Use this skill whenever the user asks about their Outlook inbox, unread mail, sending or replying to email, meetings, or their calendar.
+description: Operate Microsoft Outlook (Work/School) from the terminal via the `outlook` CLI — search/read/send/draft/reply to email, list all messages in an email conversation, mark read/unread, and list/read/create calendar events. Use this skill whenever the user asks about their Outlook inbox, unread mail, sending or replying to email, meetings, or their calendar.
 ---
 
 # outlook-cli
@@ -29,8 +29,12 @@ outlook mail search [QUERY] [flags]      # List/search messages (default folder:
   --start-date YYYY-MM-DD                # Received after
   --end-date YYYY-MM-DD                  # Received before
   --unread --important --has-attachments # Boolean filters, combinable
+  --all-folders                          # Whole mailbox incl. Sent/Deleted Items (conflicts with --folder)
+  --conversation-id CONVERSATION_ID      # Only messages in this conversation (newest first)
 
-outlook mail read MESSAGE_ID             # Full message with body (HTML stripped)
+outlook mail read MESSAGE_ID             # Full message with body (HTML stripped) + Conversation ID
+outlook mail conversation MESSAGE_ID [--folder NAME]
+  # All messages in the same conversation, oldest first; default = whole mailbox
 outlook mail send --to EMAIL --subject S --body B [--cc EMAIL] [--html] [--attach FILE]...
 outlook mail draft [--to EMAIL]... [--cc EMAIL]... [--bcc EMAIL]... [--subject S] [--body B] \
   [--importance low|normal|high] [--html] [--attach FILE]...
@@ -66,12 +70,14 @@ outlook cal create --subject S --start "YYYY-MM-DD HH:MM" --end "YYYY-MM-DD HH:M
 1. **Text search and filters are mutually exclusive.** If a `QUERY` argument is given, all filter flags (`--from`, `--unread`, `--start-date`, ...) are ignored (Graph API limitation; the CLI prints a warning). Pick one:
    - Content keywords → `outlook mail search "keyword"`
    - Structured criteria → flags only, no positional query
+   - Exception: `--conversation-id` with a `QUERY` is an **error**, not a warning. Use `mail conversation <ID>` or filters only.
 2. **IDs come from tables.** `mail search` and `cal list` print an `ID` column (long opaque Graph IDs). Pass them verbatim to `read` / `reply` / `forward` / `mark`. Never invent or truncate an ID; if you don't have one, search/list first.
 3. **Times are local.** Dates are `YYYY-MM-DD`; `cal create` datetimes are `"YYYY-MM-DD HH:MM"` in the user's local timezone (quote them — they contain a space). Output is also shown in local time.
 4. **HTML emails.** Use `--html` flag with `send`, `draft`, or `reply` to send HTML-formatted emails. Without this flag, body is sent as plain text. When using `--html`, ensure the body contains valid HTML (e.g., `--body "<p>Hello <b>world</b></p>"`).
 5. **Attachments.** Use `--attach FILE` (repeatable) with `send` or `draft` to attach files. Files must be < 3MB. To download attachments, first list them with `mail attachment list <ID>` to get attachment IDs, then download with `mail attachment download <MSG_ID> <ATT_ID>`.
 6. **Confirm before outbound actions.** Show the user the exact recipient/subject/body (or event details) and get confirmation before running `mail send`, `mail reply`, `mail forward`, or `cal create`. Prefer plain `reply` over `--reply-all` unless the user asks.
-7. **Errors** go to stderr as `Error: ...` with exit code 1. `Message not found` / `Event not found` usually means a stale or mistyped ID — re-run the search.
+7. **Conversations.** To see a whole email back-and-forth, run `outlook mail conversation <MESSAGE_ID>` — it includes your sent replies. Don't reconstruct conversations by matching subjects. Without `--folder` it also includes Deleted Items; it fetches at most 500 messages and warns if incomplete. It lists messages only; use `mail read <ID>` for bodies.
+8. **Errors** go to stderr as `Error: ...` with exit code 1. `Message not found` / `Event not found` usually means a stale or mistyped ID — re-run the search.
 
 ## Typical Workflows
 
@@ -82,6 +88,14 @@ outlook mail read <ID>                       # 2. Read the relevant one
 outlook mail reply <ID> --body "..."         # 3. Reply (after user confirms)
 outlook mail reply <ID> --body "..." --draft # 3b. Or save as draft for review
 outlook mail mark <ID>                       # 4. Mark handled
+```
+
+**Follow a conversation**
+```bash
+outlook mail search "project proposal"       # 1. Find any message in the conversation
+outlook mail conversation <ID>               # 2. List the whole conversation, oldest first
+outlook mail read <ID>                       # 3. Read the messages that matter
+outlook mail search --conversation-id <CONVERSATION_ID> --all-folders --unread  # Unread in conversation
 ```
 
 **"Am I free / what's coming up?"**

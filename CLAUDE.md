@@ -22,6 +22,7 @@ cmd/
 ├── helpers.go               # defaultNewClient (config+token → graph.Client), date parsing
 ├── auth.go                  # outlook auth login|logout|status
 ├── mail.go                  # outlook mail search|read|send|draft|reply|forward|mark
+├── mail_conversation.go     # outlook mail conversation + shared mail scope/sort helpers
 └── cal.go                   # outlook cal list|read|create
 internal/
 ├── config/config.go         # Config{ClientID, TenantID}, ~/.outlook-cli/config.toml (dir 0700, file 0600)
@@ -52,6 +53,7 @@ internal/
 
 - **Graph queries**: `MailQuery`/`EventQuery` build `url.Values`. `$search` and `$filter`/`$orderby` are mutually exclusive (Graph API limitation) — when a text query is given with filter flags, a yellow Warning is printed and filters are ignored.
 - **OData escaping**: single quotes doubled in string literals (`escapeODataString`); `$search` values wrapped in double quotes.
+- **Conversations**: filter by `conversationId eq '...'` without `$orderby` (Graph returns `InefficientFilter`), follow `@odata.nextLink` via `ListAllMessages` (same-host only, cap 500), then sort locally. An empty folder ID means `/me/messages` (whole mailbox).
 - **Folder resolution**: `"Inbox"` maps to the well-known `inbox` id; other names are looked up via `GET /me/mailFolders?$filter=displayName eq '...'`.
 - **Times**: dates parsed in local timezone, sent to Graph as UTC. Event creation sends `{dateTime, timeZone: "UTC"}`. Display converts UTC back to local (except all-day events, which keep wall-clock time).
 - **Display safety**: Graph objects use pointer fields (`*Recipient`, `*ItemBody`, ...) — display helpers nil-check everything.
