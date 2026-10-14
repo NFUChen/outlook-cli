@@ -811,3 +811,33 @@ func TestSendDraft(t *testing.T) {
 		t.Errorf("path = %q", gotPath)
 	}
 }
+
+func TestListAllMessagesRejectsForeignNextLink(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"value":[{"id":"m1"}],"@odata.nextLink":"https://evil.example/me/messages"}`)
+	}))
+	defer srv.Close()
+
+	_, _, err := testClient(srv).ListAllMessages(context.Background(), "", MailQuery{ConversationID: "c"}, 10)
+	if err == nil || !strings.Contains(err.Error(), "unexpected host") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestListAllMessagesStopsAtMax(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/me/messages" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"value":[{"id":"m1"},{"id":"m2"}],"@odata.nextLink":"`+"http://"+r.Host+`/me/messages?$skiptoken=x"}`)
+	}))
+	defer srv.Close()
+
+	msgs, complete, err := testClient(srv).ListAllMessages(context.Background(), "", MailQuery{ConversationID: "c"}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 || complete {
+		t.Errorf("len = %d, complete = %v", len(msgs), complete)
+	}
+}

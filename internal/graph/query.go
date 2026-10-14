@@ -12,10 +12,11 @@ func escapeODataString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
-const mailSelect = "id,subject,from,receivedDateTime,isRead,importance,hasAttachments"
+const mailSelect = "id,subject,from,receivedDateTime,isRead,importance,hasAttachments,conversationId,sentDateTime,isDraft,parentFolderId"
 
 // MailQuery describes filters for listing messages.
 type MailQuery struct {
+	ConversationID string
 	Search         string
 	Sender         string
 	Start          time.Time
@@ -57,10 +58,15 @@ func (q MailQuery) Values() url.Values {
 	if q.Sender != "" {
 		filters = append(filters, "contains(from/emailAddress/address,'"+escapeODataString(q.Sender)+"')")
 	}
+	if q.ConversationID != "" {
+		filters = append(filters, "conversationId eq '"+escapeODataString(q.ConversationID)+"'")
+	}
 	if len(filters) > 0 {
 		v.Set("$filter", strings.Join(filters, " and "))
 	}
-	v.Set("$orderby", "receivedDateTime desc")
+	if q.ConversationID == "" {
+		v.Set("$orderby", "receivedDateTime desc")
+	}
 	return v
 }
 

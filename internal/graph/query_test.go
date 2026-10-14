@@ -155,3 +155,13 @@ func TestQueryValuesEncode(t *testing.T) {
 		t.Errorf("round-trip $search = %q", got)
 	}
 }
+
+func TestMailQueryConversationOmitsOrderby(t *testing.T) {
+	v := MailQuery{ConversationID: "a'b", Limit: 10}.Values()
+	if got := v.Get("$filter"); got != "conversationId eq 'a''b'" {
+		t.Errorf("$filter = %q", got)
+	}
+	if v.Has("$orderby") {
+		t.Errorf("$orderby must be omitted with conversation filter, got %q", v.Get("$orderby"))
+	}
+}

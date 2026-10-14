@@ -62,9 +62,18 @@ outlook mail search --from alice@company.com             # Filter by sender (--s
 outlook mail search --start-date 2025-01-01 --end-date 2025-02-01
 outlook mail search --important --has-attachments        # Combine filters
 outlook mail search --folder "Sent Items" --limit 10     # Different folder
+outlook mail search --all-folders --unread               # Whole mailbox (conflicts with --folder)
 
-# Read a message
+# Read a message (also shows its Conversation ID)
 outlook mail read MESSAGE_ID
+
+# Conversations — every message in the same conversation as MESSAGE_ID
+outlook mail conversation MESSAGE_ID                     # Whole mailbox, oldest first
+outlook mail conversation MESSAGE_ID --folder Inbox      # Only this folder
+
+# Filter by conversation ID (from `mail read`); newest first, honours --limit
+outlook mail search --conversation-id CONVERSATION_ID --all-folders
+outlook mail search --conversation-id CONVERSATION_ID --all-folders --unread
 
 # Send a message
 outlook mail send --to bob@company.com --subject "Hello" --body "Hi Bob!"
@@ -123,6 +132,8 @@ outlook mail attachment list MESSAGE_ID
 outlook mail attachment download MESSAGE_ID ATTACHMENT_ID
 outlook mail attachment download MESSAGE_ID ATTACHMENT_ID --output ~/Downloads/renamed.pdf
 ```
+
+> **Note on conversations**: Without `--folder`, `mail conversation` and `--all-folders` search the whole mailbox via `/me/messages`, which includes Sent Items, Deleted Items and Clutter. At most 500 messages per conversation are fetched; a warning is printed if the result is incomplete. `--conversation-id` cannot be combined with a text `QUERY` (Graph does not support `$search` with `$filter`), so that combination is rejected rather than silently ignored.
 
 > **Note on HTML emails**: When using `--html`, you're responsible for providing valid HTML and escaping content as needed. The CLI passes your HTML directly to the Microsoft Graph API.
 
