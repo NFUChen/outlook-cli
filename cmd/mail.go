@@ -66,6 +66,7 @@ func newMailCmd(app *App) *cobra.Command {
 	c.AddCommand(
 		newMailSearchCmd(app),
 		newMailReadCmd(app),
+		newMailConversationCmd(app),
 		newMailSendCmd(app),
 		newMailDraftCmd(app),
 		newMailReplyCmd(app),
@@ -85,6 +86,8 @@ func newMailSearchCmd(app *App) *cobra.Command {
 		unread             bool
 		important          bool
 		hasAttachments     bool
+		conversationID     string
+		allFolders         bool
 	)
 	c := &cobra.Command{
 		Use:   "search [QUERY]",
@@ -95,6 +98,18 @@ func newMailSearchCmd(app *App) *cobra.Command {
 			if len(args) > 0 {
 				query = args[0]
 			}
+			flags := cmd.Flags()
+			conversationSet := flags.Changed("conversation-id")
+			if err := validateMailScope(limit, allFolders, flags.Changed("folder")); err != nil {
+				return err
+			}
+			if conversationSet && strings.TrimSpace(conversationID) == "" {
+				return errors.New("--conversation-id must not be empty")
+			}
+			if conversationSet && query != "" {
+				return errors.New("--conversation-id cannot be combined with a text query " +
+					"(Microsoft Graph does not support $search with $filter)")
+			}
 
 			client, err := app.NewClient()
 			if err != nil {
@@ -102,18 +117,15 @@ func newMailSearchCmd(app *App) *cobra.Command {
 			}
 			ctx := cmd.Context()
 
-			folderID, err := client.ResolveFolder(ctx, folder)
-			if errors.Is(err, graph.ErrNotFound) {
-				return fmt.Errorf("Folder not found: %s", folder)
-			}
+			folderID, err := resolveMailScope(ctx, client, folder, allFolders)
 			if err != nil {
 				return err
 			}
 
 			hasFilters := sender != "" || startDate != "" || endDate != "" ||
-				unread || important || hasAttachments
+				unread || important || hasAttachments || conversationSet
 
-			q := graph.MailQuery{Limit: limit}
+			q := graph.MailQuery{Limit: limit, ConversationID: conversationID}
 			if query != "" {
 				q.Search = query
 				if hasFilters {
@@ -141,9 +153,27 @@ func newMailSearchCmd(app *App) *cobra.Command {
 				q.Sender = sender
 			}
 
-			msgs, err := client.ListMessages(ctx, folderID, q)
-			if err != nil {
-				return err
+			var msgs []graph.Message
+			if conversationSet {
+				// Graph rejects conversationId filters combined with $orderby, so fetch
+				// the conversation and pick the newest messages locally.
+				var complete bool
+				msgs, complete, err = client.ListAllMessages(ctx, folderID, q, maxConversationMessages)
+				if err != nil {
+					return err
+				}
+				if !complete {
+					warnIncompleteConversation(app)
+				}
+				sortMessagesByTime(msgs, false)
+				if len(msgs) > limit {
+					msgs = msgs[:limit]
+				}
+			} else {
+				msgs, err = client.ListMessages(ctx, folderID, q)
+				if err != nil {
+					return err
+				}
 			}
 
 			if len(msgs) == 0 {
@@ -156,6 +186,8 @@ func newMailSearchCmd(app *App) *cobra.Command {
 	}
 	flags := c.Flags()
 	flags.StringVar(&folder, "folder", "Inbox", "Folder name to search in")
+	flags.BoolVar(&allFolders, "all-folders", false, "Search the whole mailbox, including Deleted Items (conflicts with --folder)")
+	flags.StringVar(&conversationID, "conversation-id", "", "Show only messages in this conversation")
 	flags.IntVar(&limit, "limit", 25, "Maximum number of messages to return")
 	flags.StringVar(&sender, "from", "", "Filter by sender email address")
 	flags.StringVar(&startDate, "start-date", "", "Messages received after this date (YYYY-MM-DD)")

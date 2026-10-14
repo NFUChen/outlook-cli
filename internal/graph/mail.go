@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 	"html"
 	"net/http"
 	"net/url"
@@ -76,21 +77,25 @@ type Message struct {
 	IsRead           bool         `json:"isRead"`
 	Importance       string       `json:"importance"`
 	HasAttachments   bool         `json:"hasAttachments"`
+	ConversationID   string       `json:"conversationId,omitempty"`
+	SentDateTime     time.Time    `json:"sentDateTime,omitempty"`
+	IsDraft          bool         `json:"isDraft,omitempty"`
+	ParentFolderID   string       `json:"parentFolderId,omitempty"`
 	Body             *ItemBody    `json:"body"`
 	Attachments      []Attachment `json:"attachments,omitempty"`
 }
 
 // Attachment is a Graph attachment object.
 type Attachment struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	ContentType   string `json:"contentType"`
-	Size          int    `json:"size"`
-	IsInline      bool   `json:"isInline"`
-	ContentBytes  string `json:"contentBytes,omitempty"` // base64 encoded
-	ODataType     string `json:"@odata.type,omitempty"`
-	ContentID     string `json:"contentId,omitempty"`
-	LastModified  string `json:"lastModifiedDateTime,omitempty"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ContentType  string `json:"contentType"`
+	Size         int    `json:"size"`
+	IsInline     bool   `json:"isInline"`
+	ContentBytes string `json:"contentBytes,omitempty"` // base64 encoded
+	ODataType    string `json:"@odata.type,omitempty"`
+	ContentID    string `json:"contentId,omitempty"`
+	LastModified string `json:"lastModifiedDateTime,omitempty"`
 }
 
 type mailFolder struct {
@@ -116,14 +121,57 @@ func (c *Client) ResolveFolder(ctx context.Context, name string) (string, error)
 	return out.Value[0].ID, nil
 }
 
-// ListMessages lists messages in the given folder matching the query.
+func messagesPath(folderID string) string {
+	if folderID == "" {
+		return "/me/messages"
+	}
+	return "/me/mailFolders/" + url.PathEscape(folderID) + "/messages"
+}
+
+// ListMessages lists messages in the given folder matching the query. An
+// empty folderID lists the whole mailbox.
 func (c *Client) ListMessages(ctx context.Context, folderID string, q MailQuery) ([]Message, error) {
 	var out listResponse[Message]
-	path := "/me/mailFolders/" + url.PathEscape(folderID) + "/messages"
+	path := messagesPath(folderID)
 	if err := c.do(ctx, http.MethodGet, path, q.Values(), nil, &out); err != nil {
 		return nil, err
 	}
 	return out.Value, nil
+}
+
+// ListAllMessages follows @odata.nextLink pages until all matching messages
+// are fetched or max is reached. An empty folderID searches the whole mailbox
+// (/me/messages, including Deleted Items). complete is false when more
+// matching messages exist beyond max.
+func (c *Client) ListAllMessages(ctx context.Context, folderID string, q MailQuery, max int) (msgs []Message, complete bool, err error) {
+	if max <= 0 {
+		return nil, false, fmt.Errorf("max must be positive")
+	}
+	path := messagesPath(folderID)
+	q.Limit = min(max, 100)
+	var page listResponse[Message]
+	if err := c.do(ctx, http.MethodGet, path, q.Values(), nil, &page); err != nil {
+		return nil, false, err
+	}
+	for {
+		for _, m := range page.Value {
+			if len(msgs) == max {
+				return msgs, false, nil
+			}
+			msgs = append(msgs, m)
+		}
+		if page.NextLink == "" {
+			return msgs, true, nil
+		}
+		if len(msgs) == max {
+			return msgs, false, nil
+		}
+		next := page.NextLink
+		page = listResponse[Message]{}
+		if err := c.getNextLink(ctx, next, &page); err != nil {
+			return nil, false, err
+		}
+	}
 }
 
 // GetMessage fetches a single message by ID.

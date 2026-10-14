@@ -73,6 +73,9 @@ func (p *Printer) MailDetail(m *graph.Message) {
 		lines = append(lines, p.field("CC", strings.Join(ccParts, ", ")))
 	}
 	lines = append(lines, p.field("Date", date))
+	if m.ConversationID != "" {
+		lines = append(lines, p.field("Conversation ID", m.ConversationID))
+	}
 	if m.HasAttachments {
 		lines = append(lines, p.field("Attachments", "Yes (use 'mail attachment list' to view)"))
 	}

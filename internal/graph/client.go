@@ -51,7 +51,8 @@ func NewClient(tokens oauth2.TokenSource) *Client {
 }
 
 type listResponse[T any] struct {
-	Value []T `json:"value"`
+	Value    []T    `json:"value"`
+	NextLink string `json:"@odata.nextLink"`
 }
 
 // do performs an authenticated JSON request against the Graph API.
@@ -60,7 +61,27 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
+	return c.doURL(ctx, method, u, body, out)
+}
 
+// getNextLink follows an @odata.nextLink URL. Only links on the configured
+// Graph host are followed so the bearer token is never sent elsewhere.
+func (c *Client) getNextLink(ctx context.Context, next string, out any) error {
+	base, err := url.Parse(c.BaseURL)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(next)
+	if err != nil {
+		return fmt.Errorf("invalid Graph nextLink: %w", err)
+	}
+	if u.Scheme != base.Scheme || u.Host != base.Host {
+		return fmt.Errorf("refusing to follow Graph nextLink to unexpected host: %s", u.Host)
+	}
+	return c.doURL(ctx, http.MethodGet, next, nil, out)
+}
+
+func (c *Client) doURL(ctx context.Context, method, u string, body, out any) error {
 	var reader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
